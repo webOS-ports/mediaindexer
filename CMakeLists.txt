@@ -2,7 +2,13 @@ cmake_minimum_required(VERSION 2.8.7)
 
 project(mediaindexer CXX)
 
+include(webOS/webOS)
+webos_modules_init(1 0 0 QUALIFIER RC3)
+webos_component(0 1 0)
+
 set(CMAKE_AUTOMOC ON)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 find_package(Qt5Core REQUIRED)
 if(NOT Qt5Core_FOUND)
@@ -26,3 +32,5 @@ add_executable(mediaindexer ${SOURCES})
 qt5_use_modules(mediaindexer Core)
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} rt pthread)
+
+webos_build_program()
