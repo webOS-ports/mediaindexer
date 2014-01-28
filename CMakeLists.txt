@@ -26,7 +26,8 @@ include_directories(${LUNASERVICE2_INCLUDE_DIRS})
 set(SOURCES
     src/main.cpp
     src/mediaindexer.cpp
-    src/mediatypehandler.cpp)
+    src/basesource.cpp
+    src/filesystemsource.cpp)
 
 add_executable(mediaindexer ${SOURCES})
 qt5_use_modules(mediaindexer Core)

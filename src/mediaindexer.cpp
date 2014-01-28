@@ -15,9 +15,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
+#include <QDebug>
+
 #include "mediaindexer.h"
+#include "filesystemsource.h"
 
 MediaIndexer::MediaIndexer(int &argc, char **argv) :
     QCoreApplication(argc, argv)
 {
+    mSources.append(new FilesystemSource("/media/internal", this));
+}
+
+void MediaIndexer::processFile(const QString &path)
+{
+    qDebug() << "Processing file" << path;
+}
+
+void MediaIndexer::removeFilesForDirectory(const QString &path)
+{
+    qDebug() << "Removing files for directory" << path;
 }

@@ -15,17 +15,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
-#ifndef MEDIATYPEHANDLER_H
-#define MEDIATYPEHANDLER_H
+#ifndef BASESOURCE_H
+#define BASESOURCE_H
 
 #include <QObject>
+#include <QString>
 
-class MediaTypeHandler : public QObject
+class BaseSource : public QObject
 {
     Q_OBJECT
-
 public:
-    MediaTypeHandler();
+    explicit BaseSource(const QString& name, QObject *parent = 0);
+
+    QString name() const;
+
+signals:
+
+private:
+    QString mName;
 };
 
-#endif // MEDIATYPEHANDLER_H
+#endif // BASESOURCE_H

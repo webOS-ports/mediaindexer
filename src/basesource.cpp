@@ -15,26 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
-#ifndef MEDIAINDEXER_H
-#define MEDIAINDEXER_H
+#include "basesource.h"
 
-#include <QCoreApplication>
-#include <QList>
-
-class BaseSource;
-
-class MediaIndexer : public QCoreApplication
+BaseSource::BaseSource(const QString &name, QObject *parent) :
+    QObject(parent),
+    mName(name)
 {
-    Q_OBJECT
+}
 
-public:
-    MediaIndexer(int &argc, char **argv);
-
-    void removeFilesForDirectory(const QString &path);
-    void processFile(const QString &path);
-
-private:
-    QList<BaseSource*> mSources;
-};
-
-#endif // MEDIAINDEXER_H
+QString BaseSource::name() const
+{
+    return mName;
+}

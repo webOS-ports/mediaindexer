@@ -15,8 +15,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
-#include "mediatypehandler.h"
+#ifndef FILESYSTEMSOURCE_H
+#define FILESYSTEMSOURCE_H
 
-MediaTypeHandler::MediaTypeHandler()
+#include <QFileSystemWatcher>
+
+#include "basesource.h"
+
+class MediaIndexer;
+
+class FilesystemSource : public BaseSource
 {
-}
+    Q_OBJECT
+public:
+    explicit FilesystemSource(const QString &basePath, MediaIndexer *parent);
+
+private:
+    QString mBasePath;
+    QFileSystemWatcher mWatcher;
+    MediaIndexer *mIndexer;
+
+private:
+    void scanDirectory(const QString &path, bool recursive);
+};
+
+#endif // FILESYSTEMSOURCE_H
