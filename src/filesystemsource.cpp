@@ -46,7 +46,7 @@ void FilesystemSource::scanDirectory(const QString &path, bool recursive)
     if (!baseDirectory.exists()) {
         qDebug() << "Directory" << path << "was removed";
         mWatcher.removePath(path);
-        mIndexer->removeFilesForDirectory(path);
+        mIndexer->removeFilesInDirectory(path);
         return;
     }
 

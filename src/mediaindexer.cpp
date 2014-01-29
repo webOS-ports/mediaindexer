@@ -18,7 +18,6 @@
 #include <QDebug>
 
 #include "mediaindexer.h"
-#include "filesystemsource.h"
 
 MediaIndexer::MediaIndexer(int &argc, char **argv) :
     QCoreApplication(argc, argv)
@@ -28,10 +27,10 @@ MediaIndexer::MediaIndexer(int &argc, char **argv) :
 
 void MediaIndexer::processFile(const QString &path)
 {
-    qDebug() << "Processing file" << path;
+    mDatabase.processFile(path);
 }
 
-void MediaIndexer::removeFilesForDirectory(const QString &path)
+void MediaIndexer::removeFilesInDirectory(const QString &path)
 {
-    qDebug() << "Removing files for directory" << path;
+    mDatabase.removeFilesInDirectory(path);
 }

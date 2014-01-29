@@ -15,6 +15,11 @@ if(NOT Qt5Core_FOUND)
     message(FATAL_ERROR "Qt5Core module is required!")
 endif()
 
+find_package(Qt5Sql REQUIRED)
+if(NOT Qt5Sql_FOUND)
+    message(FATAL_ERROR "Qt5Sql module is required!")
+endif()
+
 include(FindPkgConfig)
 
 pkg_check_modules(GLIB2 REQUIRED glib-2.0)
@@ -27,10 +32,11 @@ set(SOURCES
     src/main.cpp
     src/mediaindexer.cpp
     src/basesource.cpp
-    src/filesystemsource.cpp)
+    src/filesystemsource.cpp
+    src/mediaindexdatabase.cpp)
 
 add_executable(mediaindexer ${SOURCES})
-qt5_use_modules(mediaindexer Core)
+qt5_use_modules(mediaindexer Core Sql)
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} rt pthread)
 

@@ -21,7 +21,9 @@
 #include <QCoreApplication>
 #include <QList>
 
-class BaseSource;
+#include "basesource.h"
+#include "filesystemsource.h"
+#include "mediaindexdatabase.h"
 
 class MediaIndexer : public QCoreApplication
 {
@@ -30,11 +32,12 @@ class MediaIndexer : public QCoreApplication
 public:
     MediaIndexer(int &argc, char **argv);
 
-    void removeFilesForDirectory(const QString &path);
+    void removeFilesInDirectory(const QString &path);
     void processFile(const QString &path);
 
 private:
     QList<BaseSource*> mSources;
+    MediaIndexDatabase mDatabase;
 };
 
 #endif // MEDIAINDEXER_H
