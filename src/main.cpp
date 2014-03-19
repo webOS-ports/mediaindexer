@@ -15,10 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
-#include "mediaindexer.h"
-
 int main(int argc, char **argv)
 {
-    MediaIndexer mi(argc, argv);
-    return mi.exec();
+    return 0;
 }
