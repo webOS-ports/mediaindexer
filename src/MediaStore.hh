@@ -30,11 +30,12 @@ namespace mediascanner {
 
 class MediaFile;
 class Album;
+class MojoMediaDatabase;
 
 class MediaStore final
 {
 public:
-    MediaStore();
+    MediaStore(MojoMediaDatabase *mojoDb);
     MediaStore(const MediaStore &other) = delete;
     MediaStore operator=(const MediaStore &other) = delete;
     ~MediaStore();
@@ -50,6 +51,7 @@ public:
 
 private:
     sqlite3 *mFileDb;
+    MojoMediaDatabase *mMojoDb;
 };
 
 } // namespace mediascanner

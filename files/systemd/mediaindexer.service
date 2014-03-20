@@ -1,0 +1,10 @@
+[Unit]
+Description=Media indexing service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/mediaindexer
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

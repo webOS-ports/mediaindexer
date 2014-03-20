@@ -20,7 +20,8 @@
 #ifndef SUBTREEWATCHER_HH_
 #define SUBTREEWATCHER_HH_
 
-#include<string>
+#include <string>
+#include <set>
 
 namespace mediascanner {
 
@@ -41,7 +42,7 @@ private:
     bool removeDir(const std::string &abspath);
 
 public:
-    SubtreeWatcher(MediaStore &store, MetadataExtractor &extractor);
+    SubtreeWatcher(MediaStore &store, MetadataExtractor &extractor, const std::set<std::string>& ignoredDirectories);
     ~SubtreeWatcher();
     SubtreeWatcher(SubtreeWatcher &o) = delete;
     SubtreeWatcher& operator=(SubtreeWatcher &o) = delete;

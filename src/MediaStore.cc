@@ -32,6 +32,7 @@
 #include "Album.hh"
 #include "internal/utils.hh"
 #include "internal/sqliteutils.hh"
+#include "MojoMediaDatabase.hh"
 
 using namespace std;
 
@@ -86,10 +87,16 @@ CREATE TABLE files (
     version.step();
 }
 
-MediaStore::MediaStore() :
-    mFileDb(0)
+#define LUNA_DATA_DIR   "/var/luna/data"
+
+MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
+    mFileDb(0),
+    mMojoDb(mojoDb)
 {
-    int err = sqlite3_open("/var/luna/data/filenotify.db3", &mFileDb);
+    if (!g_file_test(LUNA_DATA_DIR, G_FILE_TEST_EXISTS))
+        g_mkdir_with_parents(LUNA_DATA_DIR, 0755);
+
+    int err = sqlite3_open(LUNA_DATA_DIR "/filenotify.db3", &mFileDb);
     if (err) {
         g_critical("Could not open database: %s", sqlite3_errmsg(mFileDb));
         return;
@@ -110,20 +117,22 @@ size_t MediaStore::size() const
 
 void MediaStore::insert(const MediaFile &m)
 {
-    g_message("%s: filename %s", __PRETTY_FUNCTION__, m.getFileName().c_str());
     Statement query(mFileDb, "INSERT OR REPLACE INTO files (path, etag) VALUES (?, ?)");
     string fileName = m.getFileName();
     query.bind(1, fileName);
     query.bind(2, m.getETag());
     query.step();
+
+    mMojoDb->insert(m);
 }
 
 void MediaStore::remove(const string &filename)
 {
-    g_message("%s: filename %s", __PRETTY_FUNCTION__, filename.c_str());
     Statement del(mFileDb, "DELETE FROM files WHERE path = ?");
     del.bind(1, filename);
     del.step();
+
+    mMojoDb->remove(filename);
 }
 
 void MediaStore::pruneDeleted()

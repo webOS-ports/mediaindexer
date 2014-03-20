@@ -50,13 +50,16 @@ struct SubtreeWatcherPrivate {
     std::map<int, std::string> wd2str;
     std::map<std::string, int> str2wd;
     bool keep_going;
+    std::set<std::string> ignoredDirectories;
 
     std::unique_ptr<GSource,void(*)(GSource*)> source;
 
-    SubtreeWatcherPrivate(MediaStore &store, MetadataExtractor &extractor) :
+    SubtreeWatcherPrivate(MediaStore &store, MetadataExtractor &extractor, const std::set<std::string>& ignoredDirectories) :
         store(store), extractor(extractor),
         inotifyid(inotify_init()), keep_going(true),
-        source(g_unix_fd_source_new(inotifyid, G_IO_IN), g_source_unref) {
+        source(g_unix_fd_source_new(inotifyid, G_IO_IN), g_source_unref),
+        ignoredDirectories(ignoredDirectories)
+    {
     }
 
     ~SubtreeWatcherPrivate() {
@@ -74,8 +77,9 @@ static gboolean source_callback(GIOChannel *, GIOCondition, gpointer data) {
     return TRUE;
 }
 
-SubtreeWatcher::SubtreeWatcher(MediaStore &store, MetadataExtractor &extractor) {
-    p = new SubtreeWatcherPrivate(store, extractor);
+SubtreeWatcher::SubtreeWatcher(MediaStore &store, MetadataExtractor &extractor,
+                               const std::set<std::string>& ignoredDirectories) {
+    p = new SubtreeWatcherPrivate(store, extractor, ignoredDirectories);
     if(p->inotifyid == -1) {
         string msg("Could not init inotify: ");
         msg += strerror(errno);
@@ -94,11 +98,12 @@ SubtreeWatcher::~SubtreeWatcher() {
 void SubtreeWatcher::addDir(const string &root) {
     if(root[0] != '/')
         throw runtime_error("Path must be absolute.");
-    if(is_rootlike(root)) {
-        fprintf(stderr, "Directory %s looks like a top level root directory, skipping it.\n",
-                root.c_str());
+
+    if (p->ignoredDirectories.find(root) != p->ignoredDirectories.end()) {
+        g_warning("Ignoring directory %s", root.c_str());
         return;
     }
+
     if(p->str2wd.find(root) != p->str2wd.end())
         return;
     unique_ptr<DIR, int(*)(DIR*)> dir(opendir(root.c_str()), closedir);

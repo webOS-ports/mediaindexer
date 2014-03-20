@@ -20,8 +20,9 @@
 #ifndef SCANNER_HH_
 #define SCANNER_HH_
 
-#include<string>
-#include<vector>
+#include <string>
+#include <vector>
+#include <set>
 
 #include "ScannerCore.hh"
 
@@ -35,7 +36,8 @@ public:
     Scanner();
     ~Scanner();
 
-    std::vector<DetectedFile> scanFiles(MetadataExtractor *extractor, const std::string &root, const MediaType type);
+    std::vector<DetectedFile> scanFiles(MetadataExtractor *extractor, const std::string &root, const MediaType type,
+                                        const std::set<std::string>& ignoredDirectories);
 
 };
 

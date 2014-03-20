@@ -29,6 +29,7 @@
 #include<map>
 #include<memory>
 #include<cassert>
+#include <dirent.h>
 
 #include<glib.h>
 #include<glib-unix.h>
@@ -40,39 +41,11 @@
 #include "SubtreeWatcher.hh"
 #include "Scanner.hh"
 #include "util.h"
+#include "MediaScanner.hh"
 
 using namespace std;
 
 using namespace mediascanner;
-
-class ScannerDaemon final {
-public:
-    ScannerDaemon();
-    ~ScannerDaemon();
-    int run();
-
-private:
-
-    void setupSignals();
-    void setupMountWatcher();
-    void readFiles(MediaStore &store, const string &subdir, const MediaType type);
-    void addDir(const string &dir);
-    void removeDir(const string &dir);
-    static gboolean sourceCallback(int, GIOCondition, gpointer data);
-    static gboolean signalCallback(gpointer data);
-    void processEvents();
-    void addMountedVolumes();
-
-    int mountfd;
-    unique_ptr<GSource,void(*)(GSource*)> mount_source;
-    int sigint_id, sigterm_id;
-    string mountDir;
-    string cachedir;
-    unique_ptr<MediaStore> store;
-    unique_ptr<MetadataExtractor> extractor;
-    map<string, unique_ptr<SubtreeWatcher>> subtrees;
-    unique_ptr<GMainLoop,void(*)(GMainLoop*)> main_loop;
-};
 
 static std::string getCurrentUser() {
     int uid = geteuid();
@@ -85,30 +58,23 @@ static std::string getCurrentUser() {
     return pwd->pw_name;
 }
 
-ScannerDaemon::ScannerDaemon() :
-    mount_source(nullptr, g_source_unref), sigint_id(0), sigterm_id(0),
-    main_loop(g_main_loop_new(nullptr, FALSE), g_main_loop_unref) {
-    mountDir = string("/media/") + getCurrentUser();
-    unique_ptr<MediaStore> tmp(new MediaStore);
+MediaScanner::MediaScanner(MojoMediaDatabase *mojoDb) :
+    mount_source(nullptr, g_source_unref), sigint_id(0), sigterm_id(0)
+{
+    unique_ptr<MediaStore> tmp(new MediaStore(mojoDb));
     store = move(tmp);
     extractor.reset(new MetadataExtractor());
-    setupMountWatcher();
-    addMountedVolumes();
-
-    const char *musicdir = g_get_user_special_dir(G_USER_DIRECTORY_MUSIC);
-    if (musicdir)
-        addDir(musicdir);
-
-    const char *videodir = g_get_user_special_dir(G_USER_DIRECTORY_VIDEOS);
-    if (videodir)
-        addDir(videodir);
-    // This is at the end because the initial scan may take a while
-    // and is not interruptible but we want the process to die if it
-    // gets a SIGINT or the like.
-    setupSignals();
 }
 
-ScannerDaemon::~ScannerDaemon() {
+void MediaScanner::setup(const std::string& path, const std::set<std::string> dirsToIgnore)
+{
+    mountDir = path;
+    ignoredDirectories = dirsToIgnore;
+    setupMountWatcher();
+    addMountedVolumes();
+}
+
+MediaScanner::~MediaScanner() {
     if (sigint_id != 0) {
         g_source_remove(sigint_id);
     }
@@ -121,28 +87,18 @@ ScannerDaemon::~ScannerDaemon() {
     close(mountfd);
 }
 
-gboolean ScannerDaemon::signalCallback(gpointer data) {
-    ScannerDaemon *daemon = static_cast<ScannerDaemon*>(data);
-    g_main_loop_quit(daemon->main_loop.get());
-    return TRUE;
-}
-
-void ScannerDaemon::setupSignals() {
-    sigint_id = g_unix_signal_add(SIGINT, &ScannerDaemon::signalCallback, this);
-    sigterm_id = g_unix_signal_add(SIGTERM, &ScannerDaemon::signalCallback, this);
-}
-
-void ScannerDaemon::addDir(const string &dir) {
+void MediaScanner::addDir(const string &dir) {
     assert(dir[0] == '/');
     if(subtrees.find(dir) != subtrees.end()) {
         return;
     }
-    if(is_rootlike(dir)) {
-        fprintf(stderr, "Directory %s looks like a top level root directory, skipping it.\n",
-                dir.c_str());
+
+    if (ignoredDirectories.find(dir) != ignoredDirectories.end()) {
+        g_warning("Ignoring directory %s", dir.c_str());
         return;
     }
-    unique_ptr<SubtreeWatcher> sw(new SubtreeWatcher(*store.get(), *extractor.get()));
+
+    unique_ptr<SubtreeWatcher> sw(new SubtreeWatcher(*store.get(), *extractor.get(), ignoredDirectories));
     store->restoreItems(dir);
     store->pruneDeleted();
     readFiles(*store.get(), dir, AllMedia);
@@ -150,16 +106,15 @@ void ScannerDaemon::addDir(const string &dir) {
     subtrees[dir] = move(sw);
 }
 
-void ScannerDaemon::removeDir(const string &dir) {
+void MediaScanner::removeDir(const string &dir) {
     assert(dir[0] == '/');
     assert(subtrees.find(dir) != subtrees.end());
     subtrees.erase(dir);
-
 }
 
-void ScannerDaemon::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
+void MediaScanner::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
     Scanner s;
-    vector<DetectedFile> files = s.scanFiles(extractor.get(), subdir, type);
+    vector<DetectedFile> files = s.scanFiles(extractor.get(), subdir, type, ignoredDirectories);
     for(auto &d : files) {
         // If the file is unchanged, skip it.
         if (d.etag == store.getETag(d.filename))
@@ -172,18 +127,13 @@ void ScannerDaemon::readFiles(MediaStore &store, const string &subdir, const Med
     }
 }
 
-int ScannerDaemon::run() {
-    g_main_loop_run(main_loop.get());
-    return 99;
-}
-
-gboolean ScannerDaemon::sourceCallback(int, GIOCondition, gpointer data) {
-    ScannerDaemon *daemon = static_cast<ScannerDaemon*>(data);
+gboolean MediaScanner::sourceCallback(int, GIOCondition, gpointer data) {
+    MediaScanner *daemon = static_cast<MediaScanner*>(data);
     daemon->processEvents();
     return TRUE;
 }
 
-void ScannerDaemon::setupMountWatcher() {
+void MediaScanner::setupMountWatcher() {
     mountfd = inotify_init();
     if(mountfd < 0) {
         string msg("Could not init inotify: ");
@@ -203,11 +153,11 @@ void ScannerDaemon::setupMountWatcher() {
     }
 
     mount_source.reset(g_unix_fd_source_new(mountfd, G_IO_IN));
-    g_source_set_callback(mount_source.get(), reinterpret_cast<GSourceFunc>(&ScannerDaemon::sourceCallback), this, nullptr);
+    g_source_set_callback(mount_source.get(), reinterpret_cast<GSourceFunc>(&MediaScanner::sourceCallback), this, nullptr);
     g_source_attach(mount_source.get(), nullptr);
 }
 
-void ScannerDaemon::processEvents() {
+void MediaScanner::processEvents() {
     const int BUFSIZE= 4096;
     char buf[BUFSIZE];
     bool changed = false;
@@ -243,7 +193,7 @@ void ScannerDaemon::processEvents() {
     }
 }
 
-void ScannerDaemon::addMountedVolumes() {
+void MediaScanner::addMountedVolumes() {
     unique_ptr<DIR, int(*)(DIR*)> dir(opendir(mountDir.c_str()), closedir);
     if(!dir) {
         return;
@@ -262,15 +212,4 @@ void ScannerDaemon::addMountedVolumes() {
             addDir(fullpath);
         }
     }
-}
-
-int main(int argc, char **argv) {
-    gst_init (&argc, &argv);
-    try {
-        ScannerDaemon d;
-        return d.run();
-    } catch(string &s) {
-        printf("Error: %s\n", s.c_str());
-    }
-    return 100;
 }

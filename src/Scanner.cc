@@ -22,8 +22,9 @@
 #include "util.h"
 #include <dirent.h>
 #include <sys/stat.h>
-#include<cstdio>
-#include<memory>
+#include <cstdio>
+#include <memory>
+#include <glib.h>
 
 using namespace std;
 
@@ -37,18 +38,21 @@ Scanner::~Scanner() {
 
 }
 
-vector<DetectedFile> Scanner::scanFiles(MetadataExtractor *extractor, const std::string &root, const MediaType type) {
+vector<DetectedFile> Scanner::scanFiles(MetadataExtractor *extractor, const std::string &root, const MediaType type,
+                                        const std::set<std::string>& ignoredDirectories)
+{
     vector<DetectedFile> result;
     unique_ptr<DIR, int(*)(DIR*)> dir(opendir(root.c_str()), closedir);
     printf("In subdir %s\n", root.c_str());
     if(!dir) {
         return result;
     }
-    if(is_rootlike(root)) {
-        fprintf(stderr, "Directory %s looks like a top level root directory, skipping it.\n",
-                root.c_str());
+
+    if (ignoredDirectories.find(root) != ignoredDirectories.end()) {
+        g_warning("Ignoring directory %s", root.c_str());
         return result;
     }
+
     unique_ptr<struct dirent, void(*)(void*)> entry((dirent*)malloc(sizeof(dirent) + NAME_MAX),
                 free);
     struct dirent *de;
@@ -69,7 +73,7 @@ vector<DetectedFile> Scanner::scanFiles(MetadataExtractor *extractor, const std:
                 /* Ignore non-media files */
             }
         } else if(S_ISDIR(statbuf.st_mode)) {
-            vector<DetectedFile> subdir = scanFiles(extractor, fullpath, type);
+            vector<DetectedFile> subdir = scanFiles(extractor, fullpath, type, ignoredDirectories);
             result.insert(result.end(), subdir.begin(), subdir.end());
         }
     }

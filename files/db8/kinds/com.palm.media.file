@@ -1,0 +1,10 @@
+{
+    "id": "com.palm.media.file:1",
+    "owner":"org.webosports.mediaindexer",
+    "indexes": [
+        {
+            "name": "path",
+            "props": [ { "name": "path" } ],
+        }
+    ]
+}

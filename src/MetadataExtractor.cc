@@ -166,14 +166,16 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d) {
         msg += errortxt;
         throw runtime_error(msg);
     }
+
+    if (gst_discoverer_info_get_result(info.get()) != GST_DISCOVERER_OK) {
+        g_message("error: %s", error->message);
+        throw runtime_error("Unable to discover file " + d.filename);
+    }
+
     if (error) {
         // Sometimes this gets filled in even if no error actually occurs.
         g_error_free(error);
         error = nullptr;
-    }
-
-    if (gst_discoverer_info_get_result(info.get()) != GST_DISCOVERER_OK) {
-        throw runtime_error("Unable to discover file " + d.filename);
     }
 
     const GstTagList *tags = gst_discoverer_info_get_tags(info.get());

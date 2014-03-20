@@ -36,8 +36,13 @@ pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 include_directories(${SQLITE3_INCUDE_DIRS})
 webos_add_compiler_flags(ALL ${SQLITE3_CFLAGS})
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -pedantic -Wextra -std=c99")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wextra -std=c++11")
+pkg_check_modules(MOJODB REQUIRED mojodb)
+include_directories(${MOJODB_INCUDE_DIRS})
+webos_add_compiler_flags(ALL ${MOJODB_CFLAGS})
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+webos_add_compiler_flags(ALL "-DMOJ_LINUX")
 
 file(GLOB SOURCES
     src/Album.cc
@@ -46,7 +51,10 @@ file(GLOB SOURCES
     src/MediaStore.cc
     src/MetadataExtractor.cc
     src/Scanner.cc
-    src/ScannerDaemon.cc
+    src/MediaScanner.cc
+    src/MediaScannerServiceApp.cc
+    src/MojoMediaDatabase.cc
+    src/MojoMediaObjectSerializer.cc
     src/SubtreeWatcher.cc
     src/util.cc
     src/utils.cc
@@ -57,7 +65,7 @@ add_executable(mediaindexer ${SOURCES})
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} ${PBNJSON_CPP_LDFLAGS}
     ${GIO2_LDFLAGS} ${GIO-UNIX_LDFLAGS} ${GOBJECT2_LDFLAGS} ${GSTREAMER_1_0_LDFLAGS}
-    ${GSTREAMER_1_0_LDFLAGS} ${SQLITE3_LDFLAGS} rt pthread)
+    ${GSTREAMER_1_0_LDFLAGS} ${SQLITE3_LDFLAGS} ${MOJODB_LDFLAGS} rt pthread)
 
 webos_build_daemon()
 webos_build_system_bus_files()

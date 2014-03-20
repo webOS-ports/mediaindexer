@@ -1,8 +1,5 @@
 /*
- * Copyright (C) 2013 Canonical, Ltd.
- *
- * Authors:
- *    Jussi Pakkanen <jussi.pakkanen@canonical.com>
+ * Copyright (C) 2014 Simon Busch <morphis@gravedo.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License version 3 as
@@ -17,18 +14,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SCAN_UTILS_H
-#define SCAN_UTILS_H
+#ifndef MOJOMEDIAOBJECTSERIALIZER_H
+#define MOJOMEDIAOBJECTSERIALIZER_H
 
-#include<string>
+#include <core/MojObject.h>
 
-namespace mediascanner {
+namespace mediascanner
+{
 
-std::string sqlQuote(const std::string &input);
-std::string filenameToTitle(const std::string &filename);
-std::string getUri(const std::string &filename);
-std::string string_format(const std::string fmt_str, ...);
+class MediaFile;
 
-}
+class MojoMediaObjectSerializer
+{
+public:
+    static void SerializeToDatabaseObject(const MediaFile& file, MojObject& obj);
+};
 
-#endif
+} // mediascanner
+
+#endif // MOJOMEDIAOBJECTSERIALIZER_H
