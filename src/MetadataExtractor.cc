@@ -103,8 +103,10 @@ DetectedFile MetadataExtractor::detect(const std::string &filename) {
         type = AudioMedia;
     } else if (content_type.find("video/") == 0) {
         type = VideoMedia;
+    } else if (content_type.find("image/") == 0) {
+        type = ImageMedia;
     } else {
-        throw runtime_error(string("File ") + filename + " is not audio or video");
+        type = MiscMedia;
     }
     return DetectedFile(filename, etag, content_type, type);
 }
@@ -151,6 +153,10 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d) {
     mfb.setContentType(d.content_type);
     mfb.setType(d.type);
     string uri = getUri(d.filename);
+
+    // We don't do meta data extraction for image and misc files yet
+    if (d.type == ImageMedia || d.type == MiscMedia)
+        return mfb.build();
 
     GError *error = nullptr;
     unique_ptr<GstDiscovererInfo, void(*)(void *)> info(

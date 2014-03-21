@@ -44,6 +44,12 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("_kind", "com.palm.media.video.file:1");
         // ErrorToException(err);
     }
+    else if (file.getType() == MediaType::ImageMedia) {
+        err = obj.putString("_kind", "com.palm.media.image.file:1");
+    }
+    else if (file.getType() == MediaType::MiscMedia) {
+        err = obj.putString("_kind", "com.palm.media.file:1");
+    }
 }
 
 } // mediascanner
