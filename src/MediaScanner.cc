@@ -90,6 +90,7 @@ MediaScanner::~MediaScanner() {
 void MediaScanner::addDir(const string &dir) {
     assert(dir[0] == '/');
     if(subtrees.find(dir) != subtrees.end()) {
+        g_message("%s: already watching this directory", __PRETTY_FUNCTION__);
         return;
     }
 
@@ -99,8 +100,6 @@ void MediaScanner::addDir(const string &dir) {
     }
 
     unique_ptr<SubtreeWatcher> sw(new SubtreeWatcher(*store.get(), *extractor.get(), ignoredDirectories));
-    store->restoreItems(dir);
-    store->pruneDeleted();
     readFiles(*store.get(), dir, AllMedia);
     sw->addDir(dir);
     subtrees[dir] = move(sw);
@@ -110,6 +109,14 @@ void MediaScanner::removeDir(const string &dir) {
     assert(dir[0] == '/');
     assert(subtrees.find(dir) != subtrees.end());
     subtrees.erase(dir);
+
+    // FIXME we need to remove all files below this directory
+    removeFilesBelowPath(*store.get(), dir);
+}
+
+void MediaScanner::removeFilesBelowPath(MediaStore &store, const string &path)
+{
+    store.removeFilesBelowPath(path);
 }
 
 void MediaScanner::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
@@ -178,17 +185,16 @@ void MediaScanner::processEvents() {
         string abspath = directory + '/' + filename;
         struct stat statbuf;
         lstat(abspath.c_str(), &statbuf);
-        if(S_ISDIR(statbuf.st_mode)) {
-            if(event->mask & IN_CREATE) {
-                printf("Volume %s was mounted.\n", abspath.c_str());
-                addDir(abspath);
-                changed = true;
-            } else if(event->mask & IN_DELETE){
-                printf("Volume %s was unmounted.\n", abspath.c_str());
-                removeDir(abspath);
-                changed = true;
-            }
+        if(S_ISDIR(statbuf.st_mode) && (event->mask & IN_CREATE)) {
+            printf("Volume %s was mounted.\n", abspath.c_str());
+            addDir(abspath);
+            changed = true;
         }
+        else if(event->mask & IN_DELETE){
+           printf("Volume %s was unmounted.\n", abspath.c_str());
+           removeDir(abspath);
+           changed = true;
+       }
         p += sizeof(struct inotify_event) + event->len;
     }
 }

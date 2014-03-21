@@ -204,7 +204,7 @@ void MojoMediaDatabase::finish()
 void MojoMediaDatabase::enqueue(BaseCommand *command)
 {
     command->retain();
-    commandQueue.push(command);
+    commandQueue.push_back(command);
     checkRestarting();
 }
 
@@ -223,14 +223,17 @@ void MojoMediaDatabase::checkRestarting()
 
 void MojoMediaDatabase::executeNextCommand()
 {
-    currentCommand = commandQueue.front();
-    commandQueue.pop();
-    currentCommand->execute();
-
     if (previousCommand) {
         previousCommand->release();
         previousCommand = 0;
     }
+
+    if (commandQueue.size() == 0)
+        return;
+
+    currentCommand = commandQueue.front();
+    commandQueue.pop_front();
+    currentCommand->execute();
 }
 
 void MojoMediaDatabase::insert(const MediaFile &file)

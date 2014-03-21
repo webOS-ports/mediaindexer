@@ -52,6 +52,7 @@ private:
     static gboolean sourceCallback(int, GIOCondition, gpointer data);
     void processEvents();
     void addMountedVolumes();
+    void removeFilesBelowPath(MediaStore &store, const std::string &path);
 
     int mountfd;
     std::unique_ptr<GSource,void(*)(GSource*)> mount_source;

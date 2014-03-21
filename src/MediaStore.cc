@@ -110,11 +110,6 @@ MediaStore::~MediaStore()
 {
 }
 
-size_t MediaStore::size() const
-{
-    return 0;
-}
-
 void MediaStore::insert(const MediaFile &m)
 {
     Statement query(mFileDb, "INSERT OR REPLACE INTO files (path, etag) VALUES (?, ?)");
@@ -135,16 +130,15 @@ void MediaStore::remove(const string &filename)
     mMojoDb->remove(filename);
 }
 
-void MediaStore::pruneDeleted()
+void MediaStore::removeFilesBelowPath(const string &path)
 {
-}
+    Statement query(mFileDb, "SELECT path FROM files WHERE path like ?");
+    query.bind(1, string_format("%s%%", path.c_str()));
 
-void MediaStore::archiveItems(const string &prefix)
-{
-}
-
-void MediaStore::restoreItems(const string &prefix)
-{
+    while (query.step()) {
+        std::string filePath = query.getText(0);
+        remove(filePath);
+    }
 }
 
 std::string MediaStore::getETag(const string &filename)

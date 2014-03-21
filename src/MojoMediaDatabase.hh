@@ -18,7 +18,7 @@
 #define MOJOMEDIADATABASE_H
 
 #include <db/MojDbClient.h>
-#include <queue>
+#include <deque>
 
 namespace mediascanner
 {
@@ -47,7 +47,7 @@ private:
 
 private:
     MojDbClient& dbclient;
-    std::queue<BaseCommand*> commandQueue;
+    std::deque<BaseCommand*> commandQueue;
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;
 

@@ -42,12 +42,8 @@ public:
 
     void insert(const MediaFile &m);
     void remove(const std::string &fileName);
+    void removeFilesBelowPath(const std::string& path);
     std::string getETag(const std::string &filename);
-    size_t size() const;
-    void pruneDeleted();
-
-    void archiveItems(const std::string &prefix);
-    void restoreItems(const std::string &prefix);
 
 private:
     sqlite3 *mFileDb;
