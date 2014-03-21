@@ -45,20 +45,12 @@ public:
     void setup(const std::string& path, const std::set<std::string> dirsToIgnore);
 
 private:
-    void setupMountWatcher();
     void readFiles(MediaStore &store, const std::string &subdir, const MediaType type);
     void addDir(const std::string &dir);
     void removeDir(const std::string &dir);
-    static gboolean sourceCallback(int, GIOCondition, gpointer data);
-    void processEvents();
-    void addMountedVolumes();
     void removeFilesBelowPath(MediaStore &store, const std::string &path);
 
-    int mountfd;
-    std::unique_ptr<GSource,void(*)(GSource*)> mount_source;
     int sigint_id, sigterm_id;
-    std::string mountDir;
-    std::string cachedir;
     std::unique_ptr<MediaStore> store;
     std::unique_ptr<MetadataExtractor> extractor;
     std::map<std::string, std::unique_ptr<SubtreeWatcher>> subtrees;

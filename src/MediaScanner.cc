@@ -59,7 +59,7 @@ static std::string getCurrentUser() {
 }
 
 MediaScanner::MediaScanner(MojoMediaDatabase *mojoDb) :
-    mount_source(nullptr, g_source_unref), sigint_id(0), sigterm_id(0)
+    sigint_id(0), sigterm_id(0)
 {
     unique_ptr<MediaStore> tmp(new MediaStore(mojoDb));
     store = move(tmp);
@@ -68,10 +68,8 @@ MediaScanner::MediaScanner(MojoMediaDatabase *mojoDb) :
 
 void MediaScanner::setup(const std::string& path, const std::set<std::string> dirsToIgnore)
 {
-    mountDir = path;
     ignoredDirectories = dirsToIgnore;
-    setupMountWatcher();
-    addMountedVolumes();
+    addDir(path);
 }
 
 MediaScanner::~MediaScanner() {
@@ -81,10 +79,6 @@ MediaScanner::~MediaScanner() {
     if (sigterm_id != 0) {
         g_source_remove(sigterm_id);
     }
-    if (mount_source) {
-        g_source_destroy(mount_source.get());
-    }
-    close(mountfd);
 }
 
 void MediaScanner::addDir(const string &dir) {
@@ -130,92 +124,6 @@ void MediaScanner::readFiles(MediaStore &store, const string &subdir, const Medi
             store.insert(extractor->extract(d));
         } catch(const exception &e) {
             fprintf(stderr, "Error when indexing: %s\n", e.what());
-        }
-    }
-}
-
-gboolean MediaScanner::sourceCallback(int, GIOCondition, gpointer data) {
-    MediaScanner *daemon = static_cast<MediaScanner*>(data);
-    daemon->processEvents();
-    return TRUE;
-}
-
-void MediaScanner::setupMountWatcher() {
-    mountfd = inotify_init();
-    if(mountfd < 0) {
-        string msg("Could not init inotify: ");
-        msg += strerror(errno);
-        throw runtime_error(msg);
-    }
-    int wd = inotify_add_watch(mountfd, mountDir.c_str(),
-            IN_CREATE |  IN_DELETE | IN_ONLYDIR);
-    if(wd == -1) {
-        if (errno == ENOENT) {
-            printf("Mount directory does not exist\n");
-            return;
-        }
-        string msg("Could not create inotify watch object: ");
-        msg += strerror(errno);
-        throw runtime_error(msg);
-    }
-
-    mount_source.reset(g_unix_fd_source_new(mountfd, G_IO_IN));
-    g_source_set_callback(mount_source.get(), reinterpret_cast<GSourceFunc>(&MediaScanner::sourceCallback), this, nullptr);
-    g_source_attach(mount_source.get(), nullptr);
-}
-
-void MediaScanner::processEvents() {
-    const int BUFSIZE= 4096;
-    char buf[BUFSIZE];
-    bool changed = false;
-    ssize_t num_read;
-    num_read = read(mountfd, buf, BUFSIZE);
-    if(num_read == 0) {
-        printf("Inotify returned 0.\n");
-        return;
-    }
-    if(num_read == -1) {
-        printf("Read error.\n");
-        return;
-    }
-    for(char *p = buf; p < buf + num_read;) {
-        struct inotify_event *event = (struct inotify_event *) p;
-        string directory = mountDir;
-        string filename(event->name);
-        string abspath = directory + '/' + filename;
-        struct stat statbuf;
-        lstat(abspath.c_str(), &statbuf);
-        if(S_ISDIR(statbuf.st_mode) && (event->mask & IN_CREATE)) {
-            printf("Volume %s was mounted.\n", abspath.c_str());
-            addDir(abspath);
-            changed = true;
-        }
-        else if(event->mask & IN_DELETE){
-           printf("Volume %s was unmounted.\n", abspath.c_str());
-           removeDir(abspath);
-           changed = true;
-       }
-        p += sizeof(struct inotify_event) + event->len;
-    }
-}
-
-void MediaScanner::addMountedVolumes() {
-    unique_ptr<DIR, int(*)(DIR*)> dir(opendir(mountDir.c_str()), closedir);
-    if(!dir) {
-        return;
-    }
-    unique_ptr<struct dirent, void(*)(void*)> entry((dirent*)malloc(sizeof(dirent) + NAME_MAX),
-            free);
-    struct dirent *de;
-    while(readdir_r(dir.get(), entry.get(), &de) == 0 && de ) {
-        struct stat statbuf;
-        string fname = entry.get()->d_name;
-        if(fname[0] == '.')
-            continue;
-        string fullpath = mountDir + "/" + fname;
-        lstat(fullpath.c_str(), &statbuf);
-        if(S_ISDIR(statbuf.st_mode)) {
-            addDir(fullpath);
         }
     }
 }
