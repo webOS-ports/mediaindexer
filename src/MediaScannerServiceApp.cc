@@ -14,13 +14,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <gst/gst.h>
 #include "MediaScannerServiceApp.hh"
 #include "MojoMediaDatabase.hh"
 
 int main(int argc, char** argv)
 {
-    gst_init (&argc, &argv);
     MediaScannerServiceApp app;
     return app.main(argc, argv);
 }

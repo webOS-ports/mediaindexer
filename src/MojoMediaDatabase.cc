@@ -91,7 +91,7 @@ public:
         query.from("com.palm.media.file:1");
 
         MojString filenameStr;
-        filenameStr.assign(file.getFileName().c_str());
+        filenameStr.assign(file.path().c_str());
         MojObject filenameObj(filenameStr);
         query.where("path", MojDbQuery::CompOp::OpEq, filenameObj);
 

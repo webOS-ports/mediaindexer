@@ -18,56 +18,47 @@
  */
 
 #include "MediaFile.hh"
-#include "MediaFileBuilder.hh"
 #include "internal/utils.hh"
 #include "MetadataExtractor.hh"
 
 #include <glib-object.h>
 #include <gio/gio.h>
-#include <gst/gst.h>
-#include <gst/pbutils/pbutils.h>
 
-#include<cstdio>
-#include<string>
-#include<stdexcept>
-#include<memory>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <stdexcept>
+#include <memory>
+#include <libgen.h>
+#include <iostream>
+#include <iomanip>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <taglib/taglib.h>
+#include <taglib/fileref.h>
+#include <taglib/tag.h>
+#include <taglib/tpropertymap.h>
 
 using namespace std;
 
-namespace mediascanner {
+namespace mediascanner
+{
 
-struct MetadataExtractorPrivate {
-    std::unique_ptr<GstDiscoverer, decltype(&g_object_unref)> discoverer;
-    MetadataExtractorPrivate() : discoverer(nullptr, g_object_unref) {};
-};
-
-MetadataExtractor::MetadataExtractor(int seconds) {
-    p = new MetadataExtractorPrivate();
-    GError *error = nullptr;
-
-    p->discoverer.reset(gst_discoverer_new(GST_SECOND * seconds, &error));
-    if (not p->discoverer) {
-        string errortxt(error->message);
-        g_error_free(error);
-        delete(p);
-
-        string msg = "Failed to create discoverer: ";
-        msg += errortxt;
-        throw runtime_error(msg);
-    }
-    if (error) {
-        // Sometimes this is filled in even though no error happens.
-        g_error_free(error);
-    }
+MetadataExtractor::MetadataExtractor(int seconds)
+{
 }
 
-MetadataExtractor::~MetadataExtractor() {
-    delete p;
+MetadataExtractor::~MetadataExtractor()
+{
 }
 
-DetectedFile MetadataExtractor::detect(const std::string &filename) {
+DetectedFile MetadataExtractor::detect(const std::string &path)
+{
     std::unique_ptr<GFile, void(*)(void *)> file(
-        g_file_new_for_path(filename.c_str()), g_object_unref);
+        g_file_new_for_path(path.c_str()), g_object_unref);
     if (!file) {
         throw runtime_error("Could not create file object");
     }
@@ -85,7 +76,7 @@ DetectedFile MetadataExtractor::detect(const std::string &filename) {
         g_error_free(error);
 
         string msg("Query of file info for ");
-        msg += filename;
+        msg += path;
         msg += " failed: ";
         msg += errortxt;
         throw runtime_error(msg);
@@ -108,89 +99,79 @@ DetectedFile MetadataExtractor::detect(const std::string &filename) {
     } else {
         type = MiscMedia;
     }
-    return DetectedFile(filename, etag, content_type, type);
+
+    return DetectedFile(path, etag, content_type, type);
 }
 
-static void
-extract_tag_info (const GstTagList * list, const gchar * tag, gpointer user_data) {
-    MediaFileBuilder *mfb = (MediaFileBuilder *) user_data;
-    int i, num;
-    string tagname(tag);
-
-    num = gst_tag_list_get_tag_size (list, tag);
-    for (i = 0; i < num; ++i) {
-        const GValue *val;
-
-        val = gst_tag_list_get_value_index (list, tag, i);
-        if (G_VALUE_HOLDS_STRING(val)) {
-            if (tagname == GST_TAG_ARTIST)
-                mfb->setAuthor(g_value_get_string(val));
-            else if (tagname == GST_TAG_TITLE)
-                mfb->setTitle(g_value_get_string(val));
-            else if (tagname == GST_TAG_ALBUM)
-                mfb->setAlbum(g_value_get_string(val));
-            else if (tagname == GST_TAG_ALBUM_ARTIST)
-                mfb->setAlbumArtist(g_value_get_string(val));
-        } else if (G_VALUE_HOLDS(val, GST_TYPE_DATE_TIME)) {
-            if (tagname == GST_TAG_DATE_TIME) {
-                GstDateTime *dt = static_cast<GstDateTime*>(g_value_get_boxed(val));
-                char *dt_string = gst_date_time_to_iso8601_string(dt);
-                mfb->setDate(dt_string);
-                g_free(dt_string);
-            }
-        } else if (G_VALUE_HOLDS_UINT(val)) {
-            if (tagname == GST_TAG_TRACK_NUMBER) {
-                mfb->setTrackNumber(g_value_get_uint(val));
-            }
-        }
-
-    }
+const char *get_filename_extension(const char *filename)
+{
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
 }
 
-MediaFile MetadataExtractor::extract(const DetectedFile &d) {
-    MediaFileBuilder mfb(d.filename);
-    mfb.setETag(d.etag);
-    mfb.setContentType(d.content_type);
-    mfb.setType(d.type);
-    string uri = getUri(d.filename);
+MediaFile MetadataExtractor::extract(const DetectedFile &d)
+{
+    MediaFile mf;
+    mf.setPath(d.path);
+    mf.setEtag(d.etag);
+    mf.setType(d.type);
+
+    mf.setName(basename(d.path.c_str()));
+    mf.setExtension(get_filename_extension(d.path.c_str()));
+
+    mf.setCreatedTime(time(NULL));
+
+    struct stat st;
+    if (stat(d.path.c_str(), &st) == 0)
+        mf.setModifiedTime(st.st_mtime);
 
     // We don't do meta data extraction for image and misc files yet
     if (d.type == ImageMedia || d.type == MiscMedia)
-        return mfb.build();
+        return mf;
 
-    GError *error = nullptr;
-    unique_ptr<GstDiscovererInfo, void(*)(void *)> info(
-        gst_discoverer_discover_uri(p->discoverer.get(), uri.c_str(), &error),
-        g_object_unref);
-    if (info.get() == NULL) {
-        string errortxt(error->message);
-        g_error_free(error);
+    TagLib::FileRef file(d.path.c_str());
 
-        string msg = "Discovery of file ";
-        msg += d.filename;
-        msg += " failed: ";
-        msg += errortxt;
-        throw runtime_error(msg);
+    if (!file.isNull()) {
+        mf.setAlbum(file.tag()->album().toCString());
+        mf.setArtist(file.tag()->artist().toCString());
+        mf.setTitle(file.tag()->title().toCString());
+        mf.setGenre(file.tag()->genre().toCString());
+        mf.setTrackPosition(file.tag()->track());
+        mf.setYear(file.tag()->year());
+
+        TagLib::PropertyMap tags = file.file()->properties();
+
+        if (tags.contains("ALBUMARTIST")) {
+            TagLib::StringList values = tags["ALBUMARTIST"];
+             mf.setAlbumArtist(values.toString(", ").toCString());
+        }
+
+        if (tags.contains("TRACKNUMBER")) {
+            TagLib::StringList values = tags["TRACKNUMBER"];
+            TagLib::StringList trackNumberParts = values.toString().split("/");
+            if (trackNumberParts.size() == 2) {
+                mf.setTrackPosition(trackNumberParts[0].toInt());
+                mf.setTrackTotal(trackNumberParts[1].toInt());
+            }
+        }
+
+        if (tags.contains("DISCNUMBER")) {
+            TagLib::StringList values = tags["DISCNUMBER"];
+            TagLib::StringList discNumberParts = values.toString().split("/");
+            if (discNumberParts.size() == 2) {
+                mf.setDiscPosition(discNumberParts[0].toInt());
+                mf.setDiscTotal(discNumberParts[1].toInt());
+            }
+        }
+
+        // FIXME parse for more tags. See http://taglib.github.io/api/classTagLib_1_1PropertyMap.html#a8b0c96a6df5b64a36654dc843b2375bc
+        // for a list of possible available tags
     }
 
-    if (gst_discoverer_info_get_result(info.get()) != GST_DISCOVERER_OK) {
-        g_message("error: %s", error->message);
-        throw runtime_error("Unable to discover file " + d.filename);
-    }
+    mf.rebuildSearchKey();
 
-    if (error) {
-        // Sometimes this gets filled in even if no error actually occurs.
-        g_error_free(error);
-        error = nullptr;
-    }
-
-    const GstTagList *tags = gst_discoverer_info_get_tags(info.get());
-    if (tags != NULL) {
-        gst_tag_list_foreach(tags, extract_tag_info, &mfb);
-    }
-    mfb.setDuration(static_cast<int>(
-        gst_discoverer_info_get_duration(info.get())/GST_SECOND));
-    return mfb.build();
+    return mf;
 }
 
 }

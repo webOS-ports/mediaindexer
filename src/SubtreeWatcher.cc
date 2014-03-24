@@ -156,7 +156,7 @@ void SubtreeWatcher::fileAdded(const string &abspath) {
     try {
         DetectedFile d = p->extractor.detect(abspath);
         // Only extract and insert the file if the ETag has changed.
-        if (d.etag != p->store.getETag(d.filename)) {
+        if (d.etag != p->store.getETag(d.path)) {
             p->store.insert(p->extractor.extract(d));
         }
     } catch(const exception &e) {

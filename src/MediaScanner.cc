@@ -33,7 +33,6 @@
 
 #include<glib.h>
 #include<glib-unix.h>
-#include<gst/gst.h>
 
 #include "MediaFile.hh"
 #include "MediaStore.hh"
@@ -118,7 +117,7 @@ void MediaScanner::readFiles(MediaStore &store, const string &subdir, const Medi
     vector<DetectedFile> files = s.scanFiles(extractor.get(), subdir, type, ignoredDirectories);
     for(auto &d : files) {
         // If the file is unchanged, skip it.
-        if (d.etag == store.getETag(d.filename))
+        if (d.etag == store.getETag(d.path))
             continue;
         try {
             store.insert(extractor->extract(d));

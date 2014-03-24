@@ -116,9 +116,9 @@ MediaStore::~MediaStore()
 void MediaStore::insert(const MediaFile &m)
 {
     Statement query(mFileDb, "INSERT OR REPLACE INTO files (path, etag) VALUES (?, ?)");
-    string fileName = m.getFileName();
+    string fileName = m.path();
     query.bind(1, fileName);
-    query.bind(2, m.getETag());
+    query.bind(2, m.etag());
     query.step();
 
     mMojoDb->insert(m);

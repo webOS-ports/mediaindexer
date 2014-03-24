@@ -22,79 +22,56 @@
 
 using namespace std;
 
-namespace mediascanner {
+namespace mediascanner
+{
 
-MediaFile::MediaFile(std::string filename, std::string content_type, std::string etag, std::string title, std::string date, std::string author, std::string album, std::string album_artist,
-        int track_number, int duration, MediaType type) :
-    filename(filename), content_type(content_type), etag(etag), title(title), date(date), author(author), album(album), album_artist(album_artist), track_number(track_number), duration(duration), type(type) {
-
+MediaFile::MediaFile() :
+    _path(""),
+    _etag(""),
+    _type(UnknownMedia),
+    _size(0),
+    _createdTime(0),
+    _modifiedTime(0),
+    _searchKey(""),
+    _trackPosition(0),
+    _trackTotal(0),
+    _discPosition(0),
+    _discTotal(0),
+    _genre("Unknown Genre"),
+    _artist("Unknown Artist"),
+    _albumArtist("Unknown Artist"),
+    _duration(0),
+    _bookmark(0),
+    _isRingtone(false),
+    _serviced(false),
+    _hasResizedThumbnails(false),
+    _capturedOnDevice(false),
+    _description(""),
+    _playbackPosition(0),
+    _mediaType("video"),
+    _appCacheCompleted("unattempted"),
+    _albumId(""),
+    _albumPath(""),
+    _lastPlayTime(0),
+    _year(0)
+{
 }
 
-const std::string& MediaFile::getFileName() const noexcept {
-    return filename;
-}
-
-const std::string& MediaFile::getContentType() const noexcept {
-    return content_type;
-}
-
-const std::string& MediaFile::getETag() const noexcept {
-    return etag;
-}
-
-const std::string& MediaFile::getTitle() const noexcept {
-    return title;
-}
-
-const std::string& MediaFile::getAuthor() const noexcept {
-    return author;
-}
-
-const std::string& MediaFile::getAlbum() const noexcept {
-    return album;
-}
-
-const std::string& MediaFile::getAlbumArtist() const noexcept {
-    return album_artist;
-}
-
-const std::string& MediaFile::getDate() const noexcept {
-    return date;
-}
-
-int MediaFile::getTrackNumber() const noexcept {
-    return track_number;
-}
-
-int MediaFile::getDuration() const noexcept {
-    return duration;
-}
-
-MediaType MediaFile::getType() const noexcept {
-    return type;
-}
-
-std::string MediaFile::getUri() const {
-    return mediascanner::getUri(filename);
-}
-
-bool MediaFile::operator==(const MediaFile &other) const {
-    return
-        filename == other.filename &&
-        content_type == other.content_type &&
-        etag == other.etag &&
-        title == other.title &&
-        author == other.author &&
-        album == other.album &&
-        album_artist == other.album_artist &&
-        date == other.date &&
-        track_number == other.track_number &&
-        duration == other.duration &&
-        type == other.type;
-}
-
-bool MediaFile::operator!=(const MediaFile &other) const {
-    return !(*this == other);
+void MediaFile::rebuildSearchKey()
+{
+    if (_type == AudioMedia) {
+        _searchKey = _artist;
+        _searchKey += "\t\t";
+        _searchKey += _album;
+        _searchKey += "\t\t";
+        _searchKey += _title;
+    }
+    else if (_type == VideoMedia) {
+        _searchKey = _title;
+    }
+    else {
+        _searchKey = _name;
+    }
 }
 
 }

@@ -29,14 +29,14 @@ class MediaFile;
 struct MetadataExtractorPrivate;
 
 struct DetectedFile {
-    DetectedFile(const std::string &filename,
+    DetectedFile(const std::string &path,
                  const std::string &etag,
                  const std::string content_type,
                  MediaType type)
-        : filename(filename), etag(etag), content_type(content_type)
+        : path(path), etag(etag), content_type(content_type)
         , type(type) {}
 
-    std::string filename;
+    std::string path;
     std::string etag;
     std::string content_type;
     MediaType type;
@@ -49,11 +49,8 @@ public:
     MetadataExtractor(const MetadataExtractor&) = delete;
     MetadataExtractor& operator=(MetadataExtractor &o) = delete;
 
-    DetectedFile detect(const std::string &filename);
+    DetectedFile detect(const std::string &path);
     MediaFile extract(const DetectedFile &media);
-
-private:
-    MetadataExtractorPrivate *p;
 };
 
 }
