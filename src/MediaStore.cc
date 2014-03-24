@@ -102,8 +102,11 @@ MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
         return;
     }
 
-    if (getSchemaVersion(mFileDb) < 0)
+    if (getSchemaVersion(mFileDb) != schemaVersion) {
+        deleteTables(mFileDb);
         createTables(mFileDb);
+        mMojoDb->prepareForRebuild();
+    }
 }
 
 MediaStore::~MediaStore()

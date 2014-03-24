@@ -55,40 +55,78 @@ void CheckErr(MojObject& response, MojErr err, const char* filename, int line)
 class BaseCommand : public MojSignalHandler
 {
 public:
-    BaseCommand(MojoMediaDatabase *database) :
-        database(database)
+    BaseCommand(const std::string& name, MojoMediaDatabase *database) :
+        database(database),
+        _name(name)
     {
     }
 
     virtual void execute() = 0;
 
+    std::string name() const { return _name; }
+
 protected:
     MojoMediaDatabase *database;
+    std::string _name;
 };
 
 class InsertCommand : public BaseCommand
 {
 public:
     InsertCommand(MojoMediaDatabase *database, MediaFile file) :
-        BaseCommand(database),
+        BaseCommand("Insert", database),
         file(file),
+        find_existing_slot(this, &InsertCommand::FindExistingResponse),
         insert_slot(this, &InsertCommand::InsertResponse)
     {
     }
 
     void execute()
     {
+        MojDbQuery query;
+        query.select("_id");
+
+        // We're querying for the base type of all stored files here to avoid
+        // querying each type separately
+        query.from("com.palm.media.file:1");
+
+        MojString filenameStr;
+        filenameStr.assign(file.getFileName().c_str());
+        MojObject filenameObj(filenameStr);
+        query.where("path", MojDbQuery::CompOp::OpEq, filenameObj);
+
+        MojErr err = database->databaseClient().find(find_existing_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<InsertCommand> find_existing_slot;
+    MojDbClient::Signal::Slot<InsertCommand> insert_slot;
+
+    MojErr FindExistingResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        ErrorToException(err);
+
+        if (results.size() > 0) {
+            // FIXME update it with new meta data
+            database->finish();
+            return MojErrNone;
+        }
+
         MojObject::ObjectVec objectsToInsert;
         MojObject mediaObj;
         MojoMediaObjectSerializer::SerializeToDatabaseObject(file, mediaObj);
         objectsToInsert.push(mediaObj);
 
-        MojErr err = database->databaseClient().put(insert_slot, objectsToInsert.begin(), objectsToInsert.end());
+        err = database->databaseClient().put(insert_slot, objectsToInsert.begin(), objectsToInsert.end());
         ErrorToException(err);
-    }
 
-protected:
-    MojDbClient::Signal::Slot<InsertCommand> insert_slot;
+        return MojErrNone;
+    }
 
     MojErr InsertResponse(MojObject &response, MojErr err)
     {
@@ -107,7 +145,7 @@ class RemoveCommand : public BaseCommand
 {
 public:
     RemoveCommand(MojoMediaDatabase *database, std::string filename) :
-        BaseCommand(database),
+        BaseCommand("Remove", database),
         query_removal_slot(this, &RemoveCommand::QueryForRemovalResponse),
         remove_slot(this, &RemoveCommand::RemoveResponse),
         filename(filename)
@@ -144,8 +182,84 @@ protected:
         MojErr err = response.getRequired("results", results);
         ErrorToException(err);
 
-        if (results.size() == 0)
+        if (results.size() == 0) {
+            database->finish();
             return MojErrNone;
+        }
+
+        MojObject::ObjectVec removeIds;
+
+        for (int n = 0; n < results.size(); n++) {
+            MojObject item;
+            if(!results.at(n, item))
+                continue;
+
+            MojObject idToRemove;
+            err = item.getRequired("_id", idToRemove);
+            ErrorToException(err);
+
+            err = removeIds.push(idToRemove);
+            ErrorToException(err);
+        }
+
+        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDb::FlagPurge);
+        ErrorToException(err);
+
+        return MojErrNone;
+    }
+
+    MojErr RemoveResponse(MojObject &response, MojErr err)
+    {
+        ResponseToException(response, err);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    std::string filename;
+};
+
+class RemoveAllCommand : public BaseCommand
+{
+public:
+    RemoveAllCommand(MojoMediaDatabase *database) :
+        BaseCommand("RemoveAll", database),
+        query_removal_slot(this, &RemoveAllCommand::QueryForRemovalResponse),
+        remove_slot(this, &RemoveAllCommand::RemoveResponse)
+    {
+    }
+
+    void execute()
+    {
+        MojDbQuery query;
+        query.select("_id");
+
+        // We're querying for the base type of all stored files here to avoid
+        // querying each type separately
+        query.from("com.palm.media.file:1");
+
+        MojErr err = database->databaseClient().find(query_removal_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<RemoveAllCommand> query_removal_slot;
+    MojDbClient::Signal::Slot<RemoveAllCommand> remove_slot;
+
+    MojErr QueryForRemovalResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        ErrorToException(err);
+
+        if (results.size() == 0) {
+            database->finish();
+            return MojErrNone;
+        }
 
         MojObject::ObjectVec removeIds;
 
@@ -184,7 +298,8 @@ private:
 MojoMediaDatabase::MojoMediaDatabase(MojDbClient& dbclient) :
     dbclient(dbclient),
     currentCommand(0),
-    previousCommand(0)
+    previousCommand(0),
+    restart_timeout(0)
 {
 }
 
@@ -217,8 +332,8 @@ gboolean MojoMediaDatabase::restartQueue(gpointer user_data)
 
 void MojoMediaDatabase::checkRestarting()
 {
-    if (!currentCommand && commandQueue.size() > 0)
-        g_timeout_add(0, &MojoMediaDatabase::restartQueue, this);
+    if (!currentCommand && commandQueue.size() > 0 && restart_timeout == 0)
+        restart_timeout = g_timeout_add(0, &MojoMediaDatabase::restartQueue, this);
 }
 
 void MojoMediaDatabase::executeNextCommand()
@@ -228,12 +343,16 @@ void MojoMediaDatabase::executeNextCommand()
         previousCommand = 0;
     }
 
-    if (commandQueue.size() == 0)
+    if (commandQueue.size() == 0 || currentCommand) {
+        restart_timeout = 0;
         return;
+    }
 
     currentCommand = commandQueue.front();
     commandQueue.pop_front();
     currentCommand->execute();
+
+    restart_timeout = 0;
 }
 
 void MojoMediaDatabase::insert(const MediaFile &file)
@@ -244,6 +363,21 @@ void MojoMediaDatabase::insert(const MediaFile &file)
 void MojoMediaDatabase::remove(const std::string &filename)
 {
     enqueue(new RemoveCommand(this, filename));
+}
+
+void MojoMediaDatabase::resetQueue()
+{
+    while(commandQueue.size() > 0) {
+        BaseCommand *command = commandQueue.front();
+        commandQueue.pop_front();
+        delete command;
+    }
+}
+
+void MojoMediaDatabase::prepareForRebuild()
+{
+    resetQueue();
+    enqueue(new RemoveAllCommand(this));
 }
 
 } // namespace mediascanner

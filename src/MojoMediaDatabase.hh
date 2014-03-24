@@ -33,6 +33,7 @@ public:
 
     void insert(const mediascanner::MediaFile& file);
     void remove(const std::string& filename);
+    void prepareForRebuild();
 
     MojDbClient& databaseClient() const;
 
@@ -42,6 +43,7 @@ private:
     void enqueue(BaseCommand *command);
     void checkRestarting();
     void executeNextCommand();
+    void resetQueue();
 
     static gboolean restartQueue(gpointer user_data);
 
@@ -50,6 +52,7 @@ private:
     std::deque<BaseCommand*> commandQueue;
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;
+    int restart_timeout;
 
     friend class BaseCommand;
 };
