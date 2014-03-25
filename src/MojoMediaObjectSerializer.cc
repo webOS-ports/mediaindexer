@@ -86,7 +86,7 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("_kind", "com.palm.media.image.file:1");
     }
     else if (file.type() == MediaType::MiscMedia) {
-        err = obj.putString("_kind", "com.palm.media.file:1");
+        err = obj.putString("_kind", "com.palm.media.misc.file:1");
     }
 }
 
