@@ -1,5 +1,37 @@
 {
     "id": "com.palm.media.misc.file:1",
     "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"]
+    "extends": ["com.palm.media.file:1"],
+    "indexes": [
+        ["path"],
+        ["_rev"],
+        ["_rev","path"],
+        {
+            "name": "searchKeyIndex",
+            "props": [
+                { "name": "searchKey", "collate": "primary", "tokenize": "default" }
+            ]
+        },
+        {
+            "name": "searchKeyIndexOnExtension",
+            "props": [
+                { "name": "extension" },
+                { "name": "searchKey", "collate": "primary", "tokenize": "default" }
+            ]
+        },
+        {
+            "name": "listIndexOnExtension",
+            "props": [
+                { "name": "extension" },
+                { "name": "name", "collate": "primary" }
+            ]
+        },
+        {
+            "name": "listIndex",
+            "props": [{
+                "name": "name",
+                "collate": "primary"
+            }]
+        }
+    ]
 }
