@@ -1,0 +1,26 @@
+[
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.image.file:1",
+        "caller"    : "com.palm.systemui",
+        "operations": {
+            "read"      : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.image.file:1",
+        "caller"    : "com.palm.mojo-systemui",
+        "operations": {
+            "read"      : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    }
+]
