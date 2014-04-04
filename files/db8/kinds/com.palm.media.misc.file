@@ -3,9 +3,25 @@
     "owner":"org.webosports.mediaindexer",
     "extends": ["com.palm.media.file:1"],
     "indexes": [
-        ["path"],
-        ["_rev"],
-        ["_rev","path"],
+        {
+            "name": "byPath",
+            "props": [
+                { "name": "path" }
+            ]
+        },
+        {
+            "name": "byRev",
+            "props": [
+                { "name": "_rev" }
+            ]
+        },
+        {
+            "name": "byPathAndRev",
+            "props": [
+                { "name": "path" },
+                { "name": "_rev" }
+            ]
+        },
         {
             "name": "searchKeyIndex",
             "props": [
