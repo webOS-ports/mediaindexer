@@ -19,6 +19,9 @@
 #include "internal/utils.hh"
 #include "MediaFile.hh"
 
+#define DB_KIND_DIRECTORY "/etc/palm/db/kinds/"
+#define DB_PERMISSION_DIRECTORY "/etc/palm/db/permissions/"
+
 namespace mediascanner
 {
 
@@ -290,12 +293,128 @@ protected:
 
         return MojErrNone;
     }
-
-private:
-    std::string filename;
 };
 
-MojoMediaDatabase::MojoMediaDatabase(MojDbClient& dbclient) :
+class PutKindCommand :public BaseCommand
+{
+public:
+    PutKindCommand(MojoMediaDatabase *database, const char* kindName) :
+        BaseCommand("PutKind", database),
+        kindName(kindName),
+        put_slot(this, &PutKindCommand::PutResponse),
+        put_permissions_slot(this, &PutKindCommand::PutPermissionsResponse)
+    {
+    }
+
+    void execute()
+    {
+        char *kindContent = 0;
+        unsigned int kindContentLength = 0;
+        std::string kindPath = DB_KIND_DIRECTORY;
+        kindPath += kindName;
+
+        if (!g_file_test(kindPath.c_str(), G_FILE_TEST_IS_REGULAR) ||
+            !g_file_get_contents(kindPath.c_str(), &kindContent, &kindContentLength, NULL) ||
+            kindContent == 0 ||
+            kindContentLength == 0) {
+
+            database->finish();
+            return;
+        }
+
+        MojObject kindObj;
+        kindObj.fromJson(kindContent, kindContentLength);
+
+        MojErr err = database->databaseClient().putKind(put_slot, kindObj);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<PutKindCommand> put_slot;
+    MojDbClient::Signal::Slot<PutKindCommand> put_permissions_slot;
+
+    MojErr PutResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        char *permissionsContent = 0;
+        unsigned int permissionsContentLength = 0;
+
+        std::string permissionsPath = DB_PERMISSION_DIRECTORY;
+        permissionsPath += kindName;
+
+        if (!g_file_test(permissionsPath.c_str(), G_FILE_TEST_IS_REGULAR) ||
+            !g_file_get_contents(permissionsPath.c_str(), &permissionsContent, &permissionsContentLength, NULL) ||
+            permissionsContent == 0 ||
+            permissionsContentLength == 0) {
+
+            database->finish();
+            return MojErrNone;
+        }
+
+        MojObject permissions;
+        permissions.fromJson(permissionsContent, permissionsContentLength);
+
+        MojObject perms;
+        perms.put("permissions", permissions);
+
+        MojRefCountedPtr<MojServiceRequest> request;
+        database->databaseClient().service()->createRequest(request);
+
+        MojErr err = request->send(put_permissions_slot, "com.palm.db", "putPermissions", perms);
+        ErrorToException(err);
+
+        return MojErrNone;
+    }
+
+    MojErr PutPermissionsResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    std::string kindName;
+};
+
+class RemoveKindCommand : public BaseCommand
+{
+public:
+    RemoveKindCommand(MojoMediaDatabase *database, const char* kindName) :
+        BaseCommand("RemoveKind", database),
+        kindName(kindName),
+        remove_slot(this, &RemoveKindCommand::RemoveResponse)
+    {
+    }
+
+    void execute()
+    {
+        std::string kindWithVersion = kindName;
+        kindWithVersion += ":1";
+        MojErr err = database->databaseClient().delKind(remove_slot, kindWithVersion.c_str());
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<RemoveKindCommand> remove_slot;
+
+    MojErr RemoveResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    std::string kindName;
+};
+
+MojoMediaDatabase::MojoMediaDatabase(MojDbServiceClient& dbclient) :
     dbclient(dbclient),
     currentCommand(0),
     previousCommand(0),
@@ -303,7 +422,7 @@ MojoMediaDatabase::MojoMediaDatabase(MojDbClient& dbclient) :
 {
 }
 
-MojDbClient& MojoMediaDatabase::databaseClient() const
+MojDbServiceClient& MojoMediaDatabase::databaseClient() const
 {
     return dbclient;
 }
@@ -374,10 +493,35 @@ void MojoMediaDatabase::resetQueue()
     }
 }
 
-void MojoMediaDatabase::prepareForRebuild()
+void MojoMediaDatabase::prepareForRebuild(bool withSchemaRebuild)
 {
     resetQueue();
     enqueue(new RemoveAllCommand(this));
+
+    if (withSchemaRebuild) {
+        /* Remove all kinds and register them again */
+        enqueue(new RemoveKindCommand(this, "com.palm.media.audio.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.misc.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.video.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.playlist.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.image.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.audio.album"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.audio.genre"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.audio.artist"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.image.album"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.file"));
+
+        enqueue(new PutKindCommand(this, "com.palm.media.audio.file"));
+        enqueue(new PutKindCommand(this, "com.palm.media.misc.file"));
+        enqueue(new PutKindCommand(this, "com.palm.media.video.file"));
+        enqueue(new PutKindCommand(this, "com.palm.media.playlist.file"));
+        enqueue(new PutKindCommand(this, "com.palm.media.image.file"));
+        enqueue(new PutKindCommand(this, "com.palm.media.audio.album"));
+        enqueue(new PutKindCommand(this, "com.palm.media.audio.genre"));
+        enqueue(new PutKindCommand(this, "com.palm.media.audio.artist"));
+        enqueue(new PutKindCommand(this, "com.palm.media.image.album"));
+        enqueue(new PutKindCommand(this, "com.palm.media.file"));
+    }
 }
 
 } // namespace mediascanner

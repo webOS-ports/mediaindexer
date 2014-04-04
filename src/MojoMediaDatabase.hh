@@ -17,7 +17,7 @@
 #ifndef MOJOMEDIADATABASE_H
 #define MOJOMEDIADATABASE_H
 
-#include <db/MojDbClient.h>
+#include <db/MojDbServiceClient.h>
 #include <deque>
 
 namespace mediascanner
@@ -29,13 +29,13 @@ class BaseCommand;
 class MojoMediaDatabase
 {
 public:
-    MojoMediaDatabase(MojDbClient& dbclient);
+    MojoMediaDatabase(MojDbServiceClient& dbclient);
 
     void insert(const mediascanner::MediaFile& file);
     void remove(const std::string& filename);
-    void prepareForRebuild();
+    void prepareForRebuild(bool withSchemaRebuild);
 
-    MojDbClient& databaseClient() const;
+    MojDbServiceClient& databaseClient() const;
 
     void finish();
 
@@ -48,7 +48,7 @@ private:
     static gboolean restartQueue(gpointer user_data);
 
 private:
-    MojDbClient& dbclient;
+    MojDbServiceClient& dbclient;
     std::deque<BaseCommand*> commandQueue;
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;
