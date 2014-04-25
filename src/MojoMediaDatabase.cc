@@ -337,8 +337,8 @@ protected:
     {
         ResponseToException(response, responseErr);
 
-        char *permissionsContent = 0;
-        unsigned int permissionsContentLength = 0;
+        gchar *permissionsContent = 0;
+        gsize permissionsContentLength = 0;
 
         std::string permissionsPath = DB_PERMISSION_DIRECTORY;
         permissionsPath += kindName;
