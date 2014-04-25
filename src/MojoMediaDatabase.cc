@@ -308,8 +308,8 @@ public:
 
     void execute()
     {
-        char *kindContent = 0;
-        unsigned int kindContentLength = 0;
+        gchar *kindContent = 0;
+        gsize kindContentLength = 0;
         std::string kindPath = DB_KIND_DIRECTORY;
         kindPath += kindName;
 
