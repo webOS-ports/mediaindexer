@@ -51,6 +51,8 @@ public:
 
     DetectedFile detect(const std::string &path);
     MediaFile extract(const DetectedFile &media);
+    void extractForAudio(const MediaFile &mf, const DetectedFile &d);
+    void extractForImage(const MediaFile &mf, const DetectedFile &d);
 };
 
 }

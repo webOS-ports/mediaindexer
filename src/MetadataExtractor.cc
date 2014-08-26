@@ -110,26 +110,8 @@ const char *get_filename_extension(const char *filename)
     return dot + 1;
 }
 
-MediaFile MetadataExtractor::extract(const DetectedFile &d)
+void MetadataExtractor::extractForAudio(const MediaFile &mf, const DetectedFile &d)
 {
-    MediaFile mf;
-    mf.setPath(d.path);
-    mf.setEtag(d.etag);
-    mf.setType(d.type);
-
-    mf.setName(basename(d.path.c_str()));
-    mf.setExtension(get_filename_extension(d.path.c_str()));
-
-    mf.setCreatedTime(time(NULL));
-
-    struct stat st;
-    if (stat(d.path.c_str(), &st) == 0)
-        mf.setModifiedTime(st.st_mtime);
-
-    // We don't do meta data extraction for image and misc files yet
-    if (d.type == ImageMedia || d.type == MiscMedia)
-        return mf;
-
     TagLib::FileRef file(d.path.c_str());
 
     if (!file.isNull()) {
@@ -168,6 +150,32 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
         // FIXME parse for more tags. See http://taglib.github.io/api/classTagLib_1_1PropertyMap.html#a8b0c96a6df5b64a36654dc843b2375bc
         // for a list of possible available tags
     }
+}
+
+void MetadataExtractor::extractForImage(const MediaFile &mf, const DetectedFile &d)
+{
+}
+
+MediaFile MetadataExtractor::extract(const DetectedFile &d)
+{
+    MediaFile mf;
+    mf.setPath(d.path);
+    mf.setEtag(d.etag);
+    mf.setType(d.type);
+
+    mf.setName(basename(d.path.c_str()));
+    mf.setExtension(get_filename_extension(d.path.c_str()));
+
+    mf.setCreatedTime(time(NULL));
+
+    struct stat st;
+    if (stat(d.path.c_str(), &st) == 0)
+        mf.setModifiedTime(st.st_mtime);
+
+    if (d.type == AudioMedia)
+        extractForAudio(mf, d);
+    else if (d.type == ImageMedia)
+        extractForImage(mf, d);
 
     mf.rebuildSearchKey();
 
