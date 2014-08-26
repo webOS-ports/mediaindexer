@@ -51,6 +51,7 @@ MojErr MediaScannerServiceApp::open()
 
     media_scanner.setup(ignoredDirectories);
     media_scanner.addDir(rootPath);
+    media_scanner.addDir("/usr/share/wallpapers");
 
     return MojErrNone;
 }
