@@ -49,7 +49,8 @@ MojErr MediaScannerServiceApp::open()
     err = service.attach(m_reactor.impl());
     MojErrCheck(err);
 
-    media_scanner.setup(rootPath, ignoredDirectories);
+    media_scanner.setup(ignoredDirectories);
+    media_scanner.addDir(rootPath);
 
     return MojErrNone;
 }

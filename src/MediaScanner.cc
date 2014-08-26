@@ -65,10 +65,9 @@ MediaScanner::MediaScanner(MojoMediaDatabase *mojoDb) :
     extractor.reset(new MetadataExtractor());
 }
 
-void MediaScanner::setup(const std::string& path, const std::set<std::string> dirsToIgnore)
+void MediaScanner::setup(const std::set<std::string> dirsToIgnore)
 {
     ignoredDirectories = dirsToIgnore;
-    addDir(path);
 }
 
 MediaScanner::~MediaScanner() {

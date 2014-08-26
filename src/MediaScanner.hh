@@ -42,12 +42,12 @@ public:
     MediaScanner(MojoMediaDatabase *mojoDb);
     ~MediaScanner();
 
-    void setup(const std::string& path, const std::set<std::string> dirsToIgnore);
+    void setup(const std::set<std::string> dirsToIgnore);
+    void addDir(const std::string &dir);
+    void removeDir(const std::string &dir);
 
 private:
     void readFiles(MediaStore &store, const std::string &subdir, const MediaType type);
-    void addDir(const std::string &dir);
-    void removeDir(const std::string &dir);
     void removeFilesBelowPath(MediaStore &store, const std::string &path);
 
     int sigint_id, sigterm_id;
