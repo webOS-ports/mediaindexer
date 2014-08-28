@@ -1,0 +1,10 @@
+Unsorted, unpriorized, incomplete list of things we have to be done:
+
+- Album management
+    - count images per album
+    - delete albums when no image is part of it anymore
+    - create preview thumbnail for the album
+
+- Image management
+    - create thumbnails for each image
+    - extract exif information from images
