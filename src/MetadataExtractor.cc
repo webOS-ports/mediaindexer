@@ -32,6 +32,7 @@
 #include <libgen.h>
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -142,7 +143,6 @@ void MetadataExtractor::extractForAudio(const MediaFile &mf, const DetectedFile 
             TagLib::StringList values = tags["DISCNUMBER"];
             TagLib::StringList discNumberParts = values.toString().split("/");
             if (discNumberParts.size() == 2) {
-                mf.setDiscPosition(discNumberParts[0].toInt());
                 mf.setDiscTotal(discNumberParts[1].toInt());
             }
         }
@@ -152,8 +152,31 @@ void MetadataExtractor::extractForAudio(const MediaFile &mf, const DetectedFile 
     }
 }
 
+std::string MetadataExtractor::getAlbumPathFromImage(const std::string& path)
+{
+    std::string pathInLower = path;
+    std::transform(pathInLower.begin(), pathInLower.end(), pathInLower.begin(), ::tolower);
+
+    std::string dcimPath = "/media/internal/dcim";
+    if (pathInLower.substr(0, dcimPath.size()) == dcimPath)
+        return std::string("camera://");
+
+    return path.substr(0, path.find_last_of("/"));
+}
+
+std::string MetadataExtractor::getAlbumNameFromPath(const std::string& path)
+{
+    return path.substr(path.find_last_of("/") + 1, path.size() - 1);
+}
+
 void MetadataExtractor::extractForImage(const MediaFile &mf, const DetectedFile &d)
 {
+    mf.setMediaType("image");
+    mf.setAlbumPath(getAlbumPathFromImage(mf.path()));
+    mf.setAlbumName(getAlbumNameFromPath(mf.albumPath()));
+
+    // FIXME once we have exif detection override createdTime here with the correct value
+    // mf.setCreatedTime(0);
 }
 
 MediaFile MetadataExtractor::extract(const DetectedFile &d)
@@ -166,6 +189,7 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     mf.setName(basename(d.path.c_str()));
     mf.setExtension(get_filename_extension(d.path.c_str()));
 
+    // FIXME better take the creation time of the file itself and not when we have discovered the file
     mf.setCreatedTime(time(NULL));
 
     struct stat st;

@@ -76,7 +76,7 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("description", file.description().c_str());
         err = obj.putInt("playbackPosition", file.playbackPosition());
         err = obj.putString("mediaType", file.mediaType().c_str());
-        err = obj.putString("appCacheCompleted", file.appCacheCompleted().c_str());
+        err = obj.putBool("appCacheCompleted", file.appCacheCompleted());
 
         // FIXME thumbnails
 
@@ -84,6 +84,14 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
     }
     else if (file.type() == MediaType::ImageMedia) {
         err = obj.putString("_kind", "com.palm.media.image.file:1");
+
+        err = obj.putString("albumId", file.albumId().c_str());
+        err = obj.putString("albumPath", file.albumPath().c_str());
+        err = obj.putBool("appCacheComplete", file.appCacheCompleted());
+
+        // FIXME thumbnails
+
+        err = obj.putString("type", "local");
     }
     else if (file.type() == MediaType::MiscMedia) {
         err = obj.putString("_kind", "com.palm.media.misc.file:1");

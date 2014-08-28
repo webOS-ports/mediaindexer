@@ -1,6 +1,7 @@
 {
     "id": "com.palm.media.file:1",
     "owner":"org.webosports.mediaindexer",
+    "extends": ["com.palm.media.types:1"],
     "indexes": [
         {
             "name": "path",

@@ -53,6 +53,9 @@ public:
     MediaFile extract(const DetectedFile &media);
     void extractForAudio(const MediaFile &mf, const DetectedFile &d);
     void extractForImage(const MediaFile &mf, const DetectedFile &d);
+
+    std::string getAlbumPathFromImage(const std::string& path);
+    std::string getAlbumNameFromPath(const std::string& path);
 };
 
 }

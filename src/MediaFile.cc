@@ -49,9 +49,10 @@ MediaFile::MediaFile() :
     _description(""),
     _playbackPosition(0),
     _mediaType("video"),
-    _appCacheCompleted("unattempted"),
+    _appCacheCompleted(true),
     _albumId(""),
     _albumPath(""),
+    _albumName(""),
     _lastPlayTime(0),
     _year(0)
 {

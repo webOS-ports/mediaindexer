@@ -65,10 +65,11 @@ public:
     std::string description() const noexcept { return _description; }
     unsigned int playbackPosition() const noexcept { return _playbackPosition; }
     std::string mediaType() const noexcept { return _mediaType; }
-    std::string appCacheCompleted() const noexcept { return _appCacheCompleted; }
+    bool appCacheCompleted() const noexcept { return _appCacheCompleted; }
     unsigned int lastPlayTime() const noexcept { return _lastPlayTime; }
     std::string albumId() const noexcept { return _albumId; }
     std::string albumPath() const noexcept { return _albumPath; }
+    std::string albumName() const noexcept { return _albumName; }
 
     unsigned int year() const noexcept { return _year; }
 
@@ -104,9 +105,10 @@ public:
     void setPlaybackPosition(unsigned int value) { _playbackPosition = value; }
     void setLastPlayTime(unsigned int value) { _lastPlayTime = value; }
     void setMediaType(const std::string& value) { _mediaType = value; }
-    void setAppCacheCompleted(const std::string& value) { _appCacheCompleted = value; }
+    void setAppCacheCompleted(bool value) { _appCacheCompleted = value; }
     void setAlbumId(const std::string& value) { _albumId = value; }
     void setAlbumPath(const std::string& value) { _albumPath = value; }
+    void setAlbumName(const std::string& value) { _albumName = value; }
 
     void setYear(unsigned int value) { _year = value; }
 
@@ -144,10 +146,11 @@ private:
     std::string _description;
     unsigned int _playbackPosition;
     std::string _mediaType;
-    std::string _appCacheCompleted;
+    bool _appCacheCompleted;
     std::string _albumId;
     std::string _albumPath;
     unsigned int _lastPlayTime;
+    std::string _albumName;
 
     unsigned int _year;
 };

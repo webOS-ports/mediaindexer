@@ -39,8 +39,9 @@ public:
 
     void finish();
 
-private:
     void enqueue(BaseCommand *command);
+
+private:
     void checkRestarting();
     void executeNextCommand();
     void resetQueue();

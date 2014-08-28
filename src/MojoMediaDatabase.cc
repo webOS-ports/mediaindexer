@@ -73,6 +73,137 @@ protected:
     std::string _name;
 };
 
+class InsertImageAlbum : public BaseCommand
+{
+public:
+    InsertImageAlbum(MojoMediaDatabase *database, MediaFile file, const MojObject& idToUpdate) :
+        BaseCommand("InsertImageAlbum", database),
+        query_album_slot(this, &InsertImageAlbum::QueryForAlbumResponse),
+        insert_album_slot(this, &InsertImageAlbum::InsertAlbumResponse),
+        image_update_slot(this, &InsertImageAlbum::ImageUpdateResponse),
+        file(file),
+        idToUpdate(idToUpdate)
+    {
+    }
+
+    void execute()
+    {
+        MojDbQuery query;
+        query.select("_id");
+        query.from("com.palm.media.image.album:1");
+
+        MojString albumPathStr;
+        albumPathStr.assign(file.albumPath().c_str());
+        MojObject albumPathObj(albumPathStr);
+        query.where("albumPath", MojDbQuery::CompOp::OpEq, albumPathObj);
+
+        MojErr err = database->databaseClient().find(query_album_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<InsertImageAlbum> query_album_slot;
+    MojDbClient::Signal::Slot<InsertImageAlbum> insert_album_slot;
+    MojDbClient::Signal::Slot<InsertImageAlbum> image_update_slot;
+
+    MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        ErrorToException(err);
+
+        if (results.size() > 0) {
+            updateImage(response);
+            return MojErrNone;
+        }
+
+        MojObject::ObjectVec objectsToInsert;
+
+        MojObject albumObj;
+        albumObj.putString("_kind", "com.palm.media.image.album:1");
+        albumObj.putInt("modifiedTime", file.createdTime());
+        albumObj.putString("name", file.albumName().c_str());
+        albumObj.putString("albumPath", file.albumPath().c_str());
+        albumObj.putString("searchKey", file.albumName().c_str());
+
+        MojObject totalObj;
+        // FIXME need to do a real count here
+        totalObj.putInt("images", 1);
+        albumObj.put("total", totalObj);
+
+        // albumObj.putString("appGridThumbnail", "");
+
+        // FIXME missing
+        // - sortKey string
+        // - thumbnails [ { data { length: int, offset: int, path: string }, type: string}]
+        // - total { images: int }
+
+        objectsToInsert.push(albumObj);
+
+        err = database->databaseClient().put(insert_album_slot, objectsToInsert.begin(), objectsToInsert.end());
+        ErrorToException(err);
+
+        return MojErrNone;
+    }
+
+    MojErr InsertAlbumResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        updateImage(response);
+    }
+
+    void updateImage(MojObject &response)
+    {
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        ErrorToException(err);
+
+        MojObject item;
+        if(!results.at(0, item)) {
+            database->finish();
+            return MojErrNone;
+        }
+
+        MojObject albumId;
+        err = item.getRequired("id", albumId);
+        if (err != MojErrNone) {
+            err = item.getRequired("_id", albumId);
+            ErrorToException(err);
+        }
+
+        MojObject toMerge;
+        err = toMerge.put("_id", idToUpdate);
+        ErrorToException(err);
+        err = toMerge.put("albumId", albumId);
+        ErrorToException(err);
+
+        MojObject::ObjectVec objects;
+
+        objects.push(toMerge);
+
+        err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
+        ErrorToException(err);
+
+        return MojErrNone;
+    }
+
+    MojErr ImageUpdateResponse(MojObject &response, MojErr err)
+    {
+        ResponseToException(response, err);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    MediaFile file;
+    MojObject idToUpdate;
+};
+
 class InsertCommand : public BaseCommand
 {
 public:
@@ -131,9 +262,32 @@ protected:
         return MojErrNone;
     }
 
-    MojErr InsertResponse(MojObject &response, MojErr err)
+    MojErr InsertResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, err);
+        ResponseToException(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        ErrorToException(err);
+
+        if (results.size() == 0) {
+            database->finish();
+            return MojErrNone;
+        }
+
+        if (file.type() == ImageMedia && file.albumPath().size() > 0) {
+            MojObject item;
+            if(!results.at(0, item)) {
+                database->finish();
+                return MojErrNone;
+            }
+
+            MojObject idToUpdate;
+            err = item.getRequired("id", idToUpdate);
+            ErrorToException(err);
+
+            database->enqueue(new InsertImageAlbum(database, file, idToUpdate));
+        }
 
         database->finish();
 
@@ -241,7 +395,7 @@ public:
 
         // We're querying for the base type of all stored files here to avoid
         // querying each type separately
-        query.from("com.palm.media.file:1");
+        query.from("com.palm.media.types:1");
 
         MojErr err = database->databaseClient().find(query_removal_slot, query);
         ErrorToException(err);
@@ -253,7 +407,10 @@ protected:
 
     MojErr QueryForRemovalResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        if (responseErr != MojErrNone) {
+            database->finish();
+            return MojErrNone;
+        }
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -403,8 +560,6 @@ protected:
 
     MojErr RemoveResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
-
         database->finish();
 
         return MojErrNone;
@@ -469,7 +624,12 @@ void MojoMediaDatabase::executeNextCommand()
 
     currentCommand = commandQueue.front();
     commandQueue.pop_front();
-    currentCommand->execute();
+
+    try {
+        currentCommand->execute();
+    }
+    catch(std::runtime_error& err) {
+    }
 
     restart_timeout = 0;
 }
@@ -510,7 +670,9 @@ void MojoMediaDatabase::prepareForRebuild(bool withSchemaRebuild)
         enqueue(new RemoveKindCommand(this, "com.palm.media.audio.artist"));
         enqueue(new RemoveKindCommand(this, "com.palm.media.image.album"));
         enqueue(new RemoveKindCommand(this, "com.palm.media.file"));
+        enqueue(new RemoveKindCommand(this, "com.palm.media.types"));
 
+        enqueue(new PutKindCommand(this, "com.palm.media.types"));
         enqueue(new PutKindCommand(this, "com.palm.media.audio.file"));
         enqueue(new PutKindCommand(this, "com.palm.media.misc.file"));
         enqueue(new PutKindCommand(this, "com.palm.media.video.file"));

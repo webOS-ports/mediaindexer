@@ -1,12 +1,13 @@
 {
-    "id": "com.palm.media.image.album:1",
+    "id": "com.palm.media.types:1",
     "owner":"org.webosports.mediaindexer",
     "indexes": [
         { "name": "path", "props": [{"name":"path"}] },
         { "name": "albumPath", "props": [{"name":"albumPath"}] },
         { "name": "albumId", "props": [{"name":"albumId"}] },
+        { "name": "albumPathCreatedTimeAppCacheComplete", "props": [{"name":"albumPath"},{"name":"createdTime"},{"name":"appCacheComplete"}] },
+        { "name": "albumCountChangedWatch", "props": [{"name":"appCacheComplete"},{"name":"albumId"},{"name":"_rev"}]},
         { "name": "albumPathCreatedTime", "props": [{"name":"albumPath"},{"name":"createdTime"}] },
         { "name": "mediaType", "props": [{"name":"mediaType"}]},
-        { "name": "modifiedTime", "props": [{"name":"modifiedTime"}]}
     ]
 }
