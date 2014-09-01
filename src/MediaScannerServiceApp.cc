@@ -14,6 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
 #include "MediaScannerServiceApp.hh"
 #include "MojoMediaDatabase.hh"
 
@@ -33,6 +34,7 @@ MediaScannerServiceApp::MediaScannerServiceApp() :
 {
     s_log.level(MojLogger::LevelTrace);
 
+    ignoredDirectories.insert(THUMBNAIL_DIR);
     ignoredDirectories.insert("/media/internal/android/Android");
 }
 

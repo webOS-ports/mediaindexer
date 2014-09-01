@@ -14,6 +14,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QImage>
+
+#include "config.h"
 #include "MojoMediaDatabase.hh"
 #include "MojoMediaObjectSerializer.hh"
 #include "internal/utils.hh"
@@ -73,14 +76,142 @@ protected:
     std::string _name;
 };
 
-class InsertImageAlbum : public BaseCommand
+class GenerateAlbumThumbnailsCommand : public BaseCommand
 {
 public:
-    InsertImageAlbum(MojoMediaDatabase *database, MediaFile file, const MojObject& idToUpdate) :
-        BaseCommand("InsertImageAlbum", database),
-        query_album_slot(this, &InsertImageAlbum::QueryForAlbumResponse),
-        insert_album_slot(this, &InsertImageAlbum::InsertAlbumResponse),
-        image_update_slot(this, &InsertImageAlbum::ImageUpdateResponse),
+    GenerateAlbumThumbnailsCommand(MojoMediaDatabase *database, const MojObject& albumId) :
+        BaseCommand("GenerateAlbumThumbnailsCommand", database),
+        albumId(albumId)
+    {
+    }
+
+    void execute()
+    {
+        database->finish();
+    }
+
+private:
+    MojObject albumId;
+};
+
+
+class CountAlbumImagesCommand : public BaseCommand
+{
+public:
+    CountAlbumImagesCommand(MojoMediaDatabase *database, const MojObject& albumId) :
+        BaseCommand("CountAlbumImagesCommand", database),
+        query_images_slot(this, &CountAlbumImagesCommand::QueryImagesResponse),
+        album_update_slot(this, &CountAlbumImagesCommand::AlbumUpdateResponse),
+        albumId(albumId)
+    {
+    }
+
+    void execute()
+    {
+        MojDbQuery query;
+        query.select("_id");
+        query.from("com.palm.media.image.file:1");
+        query.where("albumId", MojDbQuery::CompOp::OpEq, albumId);
+
+        MojErr err = database->databaseClient().find(query_images_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<CountAlbumImagesCommand> query_images_slot;
+    MojDbClient::Signal::Slot<CountAlbumImagesCommand> album_update_slot;
+
+    MojErr QueryImagesResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        if (err != MojErrNone) {
+            database->finish();
+            return MojErrNone;
+        }
+
+        MojObject toMerge;
+        toMerge.put("_id", albumId);
+
+        MojObject totalObj;
+        totalObj.putInt("images", results.size());
+        toMerge.put("total", totalObj);
+
+        MojObject::ObjectVec objects;
+        objects.push(toMerge);
+
+        err = database->databaseClient().merge(album_update_slot, objects.begin(), objects.end());
+        if (err != MojErrNone) {
+            database->finish();
+            return MojErrNone;
+        }
+
+        return MojErrNone;
+    }
+
+    MojErr AlbumUpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    MojObject albumId;
+};
+
+class AssignImageToAlbumCommand : public BaseCommand
+{
+public:
+    AssignImageToAlbumCommand(MojoMediaDatabase *database, const MojObject& imageId, const MojObject& albumId) :
+        BaseCommand("AssignImageToAlbumCommand", database),
+        image_update_slot(this, &AssignImageToAlbumCommand::ImageUpdateResponse),
+        imageId(imageId),
+        albumId(albumId)
+    {
+    }
+
+    void execute()
+    {
+        MojObject toMerge;
+        toMerge.put("_id", imageId);
+        toMerge.put("albumId", albumId);
+
+        MojObject::ObjectVec objects;
+        objects.push(toMerge);
+
+        MojErr err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<AssignImageToAlbumCommand> image_update_slot;
+
+    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    MojObject imageId;
+    MojObject albumId;
+};
+
+class AddAlbumForImageCommand : public BaseCommand
+{
+public:
+    AddAlbumForImageCommand(MojoMediaDatabase *database, MediaFile file, const MojObject& idToUpdate) :
+        BaseCommand("AddAlbumForImageCommand", database),
+        query_album_slot(this, &AddAlbumForImageCommand::QueryForAlbumResponse),
+        insert_album_slot(this, &AddAlbumForImageCommand::InsertAlbumResponse),
         file(file),
         idToUpdate(idToUpdate)
     {
@@ -102,9 +233,8 @@ public:
     }
 
 protected:
-    MojDbClient::Signal::Slot<InsertImageAlbum> query_album_slot;
-    MojDbClient::Signal::Slot<InsertImageAlbum> insert_album_slot;
-    MojDbClient::Signal::Slot<InsertImageAlbum> image_update_slot;
+    MojDbClient::Signal::Slot<AddAlbumForImageCommand> query_album_slot;
+    MojDbClient::Signal::Slot<AddAlbumForImageCommand> insert_album_slot;
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
@@ -114,10 +244,9 @@ protected:
         MojErr err = response.getRequired("results", results);
         ErrorToException(err);
 
-        if (results.size() > 0) {
-            updateImage(response);
-            return MojErrNone;
-        }
+        // if we already have a album with the same path we can use it
+        if (results.size() > 0)
+            return updateImage(response);
 
         MojObject::ObjectVec objectsToInsert;
 
@@ -127,18 +256,20 @@ protected:
         albumObj.putString("name", file.albumName().c_str());
         albumObj.putString("albumPath", file.albumPath().c_str());
         albumObj.putString("searchKey", file.albumName().c_str());
+        // FIXME what are the rules to generate a correct sort key?
+        albumObj.putString("sortKey", "");
+        // FIXME do we need this one?
+        albumObj.putString("appGridThumbnail", "");
 
         MojObject totalObj;
-        // FIXME need to do a real count here
-        totalObj.putInt("images", 1);
+        // image count update will be triggered by the AssignImageToAlbumCommand later
+        totalObj.putInt("images", 0);
         albumObj.put("total", totalObj);
 
-        // albumObj.putString("appGridThumbnail", "");
-
-        // FIXME missing
-        // - sortKey string
-        // - thumbnails [ { data { length: int, offset: int, path: string }, type: string}]
-        // - total { images: int }
+        // we will enqueue a command once the album is created to generate the
+        // thumbnails
+        MojObject thumbnails(MojObject::TypeArray);
+        albumObj.put("thumbnails", thumbnails);
 
         objectsToInsert.push(albumObj);
 
@@ -152,10 +283,10 @@ protected:
     {
         ResponseToException(response, responseErr);
 
-        updateImage(response);
+        return updateImage(response);
     }
 
-    void updateImage(MojObject &response)
+    MojErr updateImage(MojObject &response)
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -163,6 +294,7 @@ protected:
 
         MojObject item;
         if(!results.at(0, item)) {
+            // FIXME failed to create album. what now?
             database->finish();
             return MojErrNone;
         }
@@ -174,25 +306,8 @@ protected:
             ErrorToException(err);
         }
 
-        MojObject toMerge;
-        err = toMerge.put("_id", idToUpdate);
-        ErrorToException(err);
-        err = toMerge.put("albumId", albumId);
-        ErrorToException(err);
-
-        MojObject::ObjectVec objects;
-
-        objects.push(toMerge);
-
-        err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
-        ErrorToException(err);
-
-        return MojErrNone;
-    }
-
-    MojErr ImageUpdateResponse(MojObject &response, MojErr err)
-    {
-        ResponseToException(response, err);
+        database->enqueue(new AssignImageToAlbumCommand(database, idToUpdate, albumId), false);
+        database->enqueue(new GenerateAlbumThumbnailsCommand(database, albumId), false);
 
         database->finish();
 
@@ -202,6 +317,75 @@ protected:
 private:
     MediaFile file;
     MojObject idToUpdate;
+};
+
+class GenerateImageThumbnailCommand : public BaseCommand
+{
+public:
+    GenerateImageThumbnailCommand(MojoMediaDatabase *database, const MojObject& imageId, const std::string& imagePath, const std::string& extension) :
+        BaseCommand("GenerateImageThumbnailCommand", database),
+        update_image_slot(this, &GenerateImageThumbnailCommand::UpdateImageResponse),
+        imageId(imageId),
+        imagePath(imagePath),
+        extension(extension)
+    {
+    }
+
+    void execute()
+    {
+        // path for thumbnails /media/internal/.thumbnails/<some path>
+
+        GChecksum *checksum;
+        checksum = g_checksum_new(G_CHECKSUM_MD5);
+        g_checksum_update(checksum, (const guchar *) imagePath.c_str(), imagePath.length());
+
+        guint8 digest[16];
+        gsize digest_len = sizeof (digest);
+        g_checksum_get_digest(checksum, digest, &digest_len);
+
+        std::string file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
+        std::string thumbnailPath = g_build_filename(THUMBNAIL_DIR, file.c_str());
+
+        printf("thumbnail path is %s\n", thumbnailPath.c_str());
+
+        if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
+            g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
+
+        // FIXME read from /etc/palm/luna-platform.conf
+        int gridUnit = 18;
+        QImage origImage(QString::fromStdString(imagePath));
+        QImage thumbnailImage = origImage.scaledToWidth((gridUnit * 8), Qt::SmoothTransformation);
+        thumbnailImage.save(QString::fromStdString(thumbnailPath));
+
+        MojObject toMerge;
+        toMerge.put("_id", imageId);
+
+
+        MojObject appGridThumbnail;
+        appGridThumbnail.putString("path", thumbnailPath.c_str());
+        toMerge.put("appGridThumbnail", appGridThumbnail);
+
+        MojObject::ObjectVec objects;
+        objects.push(toMerge);
+
+        MojErr err = database->databaseClient().merge(update_image_slot, objects.begin(), objects.end());
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<GenerateImageThumbnailCommand> update_image_slot;
+
+    MojErr UpdateImageResponse(MojObject &response, MojErr responseErr)
+    {
+        ResponseToException(response, responseErr);
+        database->finish();
+        return MojErrNone;
+    }
+
+private:
+    MojObject imageId;
+    std::string imagePath;
+    std::string extension;
 };
 
 class InsertCommand : public BaseCommand
@@ -286,7 +470,8 @@ protected:
             err = item.getRequired("id", idToUpdate);
             ErrorToException(err);
 
-            database->enqueue(new InsertImageAlbum(database, file, idToUpdate));
+            database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path(), file.extension()), false);
+            database->enqueue(new AddAlbumForImageCommand(database, file, idToUpdate), false);
         }
 
         database->finish();
@@ -582,19 +767,28 @@ MojDbServiceClient& MojoMediaDatabase::databaseClient() const
     return dbclient;
 }
 
+gboolean MojoMediaDatabase::checkQueue(gpointer user_data)
+{
+    MojoMediaDatabase *database = static_cast<MojoMediaDatabase*>(user_data);
+    database->checkRestarting();
+    return FALSE;
+}
+
 void MojoMediaDatabase::finish()
 {
     previousCommand = currentCommand;
     currentCommand = 0;
 
-    checkRestarting();
+    // Don't directly restart to break through the cycle
+    g_timeout_add(0, &MojoMediaDatabase::checkQueue, this);
 }
 
-void MojoMediaDatabase::enqueue(BaseCommand *command)
+void MojoMediaDatabase::enqueue(BaseCommand *command, bool restart)
 {
     command->retain();
     commandQueue.push_back(command);
-    checkRestarting();
+    if (restart)
+        checkRestarting();
 }
 
 gboolean MojoMediaDatabase::restartQueue(gpointer user_data)
@@ -629,6 +823,7 @@ void MojoMediaDatabase::executeNextCommand()
         currentCommand->execute();
     }
     catch(std::runtime_error& err) {
+        printf("%s: Got error %s\n", __PRETTY_FUNCTION__, err.what());
     }
 
     restart_timeout = 0;

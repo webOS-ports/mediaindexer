@@ -1,5 +1,8 @@
 {
     "id": "com.palm.media.image.file:1",
     "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"]
+    "extends": ["com.palm.media.file:1"],
+    "indexes": [
+        { "name": "albumId", "props": [{"name":"albumId"}] },
+    ]
 }

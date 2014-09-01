@@ -39,7 +39,7 @@ public:
 
     void finish();
 
-    void enqueue(BaseCommand *command);
+    void enqueue(BaseCommand *command, bool restart = true);
 
 private:
     void checkRestarting();
@@ -47,6 +47,7 @@ private:
     void resetQueue();
 
     static gboolean restartQueue(gpointer user_data);
+    static gboolean checkQueue(gpointer user_data);
 
 private:
     MojDbServiceClient& dbclient;

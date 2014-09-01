@@ -40,6 +40,11 @@ pkg_check_modules(TAGLIB REQUIRED taglib)
 include_directories(${TAGLIB_INCLUDE_DIRS})
 webos_add_compiler_flags(ALL ${TAGLIB_CFLAGS})
 
+find_package(Qt5Gui REQUIRED)
+if(NOT Qt5Gui_FOUND)
+    message(FATAL_ERROR "Qt5Gui module is required!")
+endif()
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 webos_add_compiler_flags(ALL "-DMOJ_LINUX")
@@ -61,6 +66,7 @@ file(GLOB SOURCES
     src/mozilla/Normalize.c)
 
 add_executable(mediaindexer ${SOURCES})
+qt5_use_modules(mediaindexer Gui)
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} ${PBNJSON_CPP_LDFLAGS}
     ${GIO2_LDFLAGS} ${GIO-UNIX_LDFLAGS} ${GOBJECT2_LDFLAGS} ${SQLITE3_LDFLAGS}
