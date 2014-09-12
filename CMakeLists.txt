@@ -40,6 +40,10 @@ pkg_check_modules(TAGLIB REQUIRED taglib)
 include_directories(${TAGLIB_INCLUDE_DIRS})
 webos_add_compiler_flags(ALL ${TAGLIB_CFLAGS})
 
+pkg_check_modules(LUNA_SYSMGR_COMMON LunaSysMgrCommon REQUIRED)
+include_directories(${LUNA_SYSMGR_COMMON_INCLUDE_DIRS})
+webos_add_compiler_flags(ALL ${LUNA_SYSMGR_COMMON_CFLAGS})
+
 find_package(Qt5Gui REQUIRED)
 if(NOT Qt5Gui_FOUND)
     message(FATAL_ERROR "Qt5Gui module is required!")
@@ -70,7 +74,7 @@ qt5_use_modules(mediaindexer Gui)
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} ${PBNJSON_CPP_LDFLAGS}
     ${GIO2_LDFLAGS} ${GIO-UNIX_LDFLAGS} ${GOBJECT2_LDFLAGS} ${SQLITE3_LDFLAGS}
-    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} rt pthread)
+    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} ${LUNA_SYSMGR_COMMON_LDFLAGS} rt pthread)
 
 webos_build_daemon()
 webos_build_system_bus_files()

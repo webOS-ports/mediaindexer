@@ -16,6 +16,8 @@
 
 #include <QImage>
 
+#include <Settings.h>
+
 #include "config.h"
 #include "MojoMediaDatabase.hh"
 #include "MojoMediaObjectSerializer.hh"
@@ -351,8 +353,7 @@ public:
         if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
             g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
 
-        // FIXME read from /etc/palm/luna-platform.conf
-        int gridUnit = 18;
+        int gridUnit = Settings::LunaSettings()->gridUnit;
         QImage origImage(QString::fromStdString(imagePath));
         QImage thumbnailImage = origImage.scaledToWidth((gridUnit * 8), Qt::SmoothTransformation);
         thumbnailImage.save(QString::fromStdString(thumbnailPath));
