@@ -1,4 +1,66 @@
 {
     "id": "com.palm.media.audio.album:1",
-    "owner":"org.webosports.mediaindexer"
+    "owner": "org.webosports.mediaindexer",
+    "indexes": [
+        {
+            "name": "albumname",
+            "props": [
+                {
+                    "collate": "primary",
+                    "name": "name"
+                }
+            ]
+        },
+        {
+            "name": "serviced",
+            "props": [
+                {
+                    "name": "serviced"
+                }
+            ]
+        },
+        {
+            "name": "hasResizedThumbnails",
+            "props": [
+                {
+                    "name": "hasResizedThumbnails"
+                }
+            ]
+        },
+        {
+            "name": "genre",
+            "props": [
+                {
+                    "name": "genre"
+                }
+            ]
+        },
+        {
+            "name": "artist",
+            "props": [
+                {
+                    "name": "artist"
+                }
+            ]
+        },
+        {
+            "name": "hasResizedThumbnails__del",
+            "props": [
+                {
+                    "name": "hasResizedThumbnails"
+                },
+                {
+                    "name": "_del"
+                }
+            ]
+        },
+        {
+            "name": "_rev",
+            "props": [
+                {
+                    "name": "_rev"
+                }
+            ]
+        }
+    ]
 }

@@ -5,7 +5,7 @@
     "indexes": [
         {
             "name": "path",
-            "props": [ { "name": "path" } ],
+            "props": [ { "name": "path" } ]
         }
     ]
 }

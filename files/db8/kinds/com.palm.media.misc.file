@@ -1,53 +1,80 @@
 {
     "id": "com.palm.media.misc.file:1",
-    "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"],
+    "owner": "org.webosports.mediaindexer",
+    "extends": [
+        "com.palm.media.file:1"
+    ],
     "indexes": [
         {
-            "name": "byPath",
+            "name": "path",
             "props": [
-                { "name": "path" }
+                {
+                    "name": "path"
+                }
             ]
         },
         {
             "name": "byRev",
             "props": [
-                { "name": "_rev" }
+                {
+                    "name": "_rev"
+                }
             ]
         },
         {
             "name": "byPathAndRev",
             "props": [
-                { "name": "path" },
-                { "name": "_rev" }
+                {
+                    "name": "path"
+                },
+                {
+                    "name": "_rev"
+                }
             ]
         },
         {
             "name": "searchKeyIndex",
             "props": [
-                { "name": "searchKey", "collate": "primary", "tokenize": "default" }
+                {
+                    "name": "searchKey",
+                    "collate": "primary",
+                    "tokenize": "default"
+                }
             ]
         },
         {
             "name": "searchKeyIndexOnExtension",
             "props": [
-                { "name": "extension" },
-                { "name": "searchKey", "collate": "primary", "tokenize": "default" }
+                {
+                    "name": "extension"
+                },
+                {
+                    "name": "searchKey",
+                    "collate": "primary",
+                    "tokenize": "default"
+                }
             ]
         },
         {
             "name": "listIndexOnExtension",
             "props": [
-                { "name": "extension" },
-                { "name": "name", "collate": "primary" }
+                {
+                    "name": "extension"
+                },
+                {
+                    "name": "name",
+                    "collate": "primary"
+                }
             ]
         },
         {
             "name": "listIndex",
-            "props": [{
-                "name": "name",
-                "collate": "primary"
-            }]
+            "props": [
+                {
+                    "name": "name",
+                    "collate": "primary"
+                }
+            ]
         }
     ]
 }

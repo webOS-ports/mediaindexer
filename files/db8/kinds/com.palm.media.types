@@ -1,13 +1,125 @@
 {
     "id": "com.palm.media.types:1",
-    "owner":"org.webosports.mediaindexer",
+    "owner": "org.webosports.mediaindexer",
     "indexes": [
-        { "name": "path", "props": [{"name":"path"}] },
-        { "name": "albumPath", "props": [{"name":"albumPath"}] },
-        { "name": "albumId", "props": [{"name":"albumId"}] },
-        { "name": "albumPathCreatedTimeAppCacheComplete", "props": [{"name":"albumPath"},{"name":"createdTime"},{"name":"appCacheComplete"}] },
-        { "name": "albumCountChangedWatch", "props": [{"name":"appCacheComplete"},{"name":"albumId"},{"name":"_rev"}]},
-        { "name": "albumPathCreatedTime", "props": [{"name":"albumPath"},{"name":"createdTime"}] },
-        { "name": "mediaType", "props": [{"name":"mediaType"}]},
+        {
+            "name": "albumPathCreatedTimeAppCacheComplete",
+            "props": [
+                {
+                    "name": "albumPath"
+                },
+                {
+                    "name": "createdTime"
+                },
+                {
+                    "name": "appCacheComplete"
+                }
+            ]
+        },
+        {
+            "name": "path",
+            "props": [
+                {
+                    "name": "path"
+                }
+            ]
+        },
+        {
+            "name": "albumPath",
+            "props": [
+                {
+                    "name": "albumPath"
+                }
+            ]
+        },
+        {
+            "name": "albumId",
+            "props": [
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "appCacheComplete_albumId",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "appCacheComplete_type_albumId",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "type"
+                },
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "mediaType",
+            "props": [
+                {
+                    "name": "mediaType"
+                }
+            ]
+        },
+        {
+            "name": "appCacheComplete_albumId_createdTime",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "albumId"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "incDel": true,
+            "name": "albumCountChangedWatch",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "albumId"
+                },
+                {
+                    "name": "_rev"
+                }
+            ]
+        },
+        {
+            "name": "albumPath_createdTime",
+            "props": [
+                {
+                    "name": "albumPath"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "_del",
+            "props": [
+                {
+                    "name": "_del"
+                }
+            ]
+        }
     ]
 }
