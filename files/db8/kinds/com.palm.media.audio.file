@@ -1,5 +1,294 @@
 {
     "id": "com.palm.media.audio.file:1",
-    "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"],
+    "owner": "org.webosports.mediaindexer",
+    "extends": [
+        "com.palm.media.file:1"
+    ],
+    "indexes": [
+        {
+            "name": "path",
+            "props": [
+                {
+                    "name": "path"
+                }
+            ]
+        },
+        {
+            "name": "hasResizedThumbnails__del",
+            "props": [
+                {
+                    "name": "hasResizedThumbnails"
+                },
+                {
+                    "name": "_del"
+                }
+            ]
+        },
+        {
+            "name": "searchAllSongs",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "searchKey",
+                    "tokenize": "default"
+                }
+            ]
+        },
+        {
+            "name": "songsByAlbumWithGenre",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "genre"
+                },
+                {
+                    "collate": "primary",
+                    "name": "album"
+                }
+            ]
+        },
+        {
+            "name": "songsByArtistWithGenre",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "genre"
+                },
+                {
+                    "collate": "primary",
+                    "name": "artist"
+                }
+            ]
+        },
+        {
+            "name": "songsByGenre",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "genre"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "songsByArtist",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "artist"
+                },
+                {
+                    "name": "sortKey.trackAndDisc"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "songsByArtistAlbums",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "artist"
+                },
+                {
+                    "name": "sortKey.albumDiscAndTrack"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "AllSongsByArtistAlbumTrackAndDisc",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "sortKey.artistAlbumDiscAndTrack"
+                }
+            ]
+        },
+        {
+            "name": "songsByAlbum",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "album"
+                },
+                {
+                    "name": "sortKey.trackAndDisc"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "songsByAlbumArist",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "album"
+                },
+                {
+                    "name": "albumArtist"
+                },
+                {
+                    "name": "sortKey.trackAndDisc"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "songsByArtistAlbum",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "artist"
+                },
+                {
+                    "name": "album"
+                },
+                {
+                    "name": "sortKey.trackAndDisc"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "isRingtone_album_albumArtist",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "album"
+                },
+                {
+                    "name": "albumArtist"
+                }
+            ]
+        },
+        {
+            "name": "songsByTitle",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "AllSongsByArtist",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "artist"
+                }
+            ]
+        },
+        {
+            "name": "isRingtone_title_artist",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "name": "title"
+                },
+                {
+                    "name": "artist"
+                }
+            ]
+        },
+        {
+            "name": "AllSongsByAlbum",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "album"
+                }
+            ]
+        },
+        {
+            "name": "AllSongsByAlbumTrackAndDisc",
+            "props": [
+                {
+                    "name": "isRingtone"
+                },
+                {
+                    "collate": "primary",
+                    "name": "sortKey.albumDiscAndTrack"
+                }
+            ]
+        },
+        {
+            "name": "serviced",
+            "props": [
+                {
+                    "name": "serviced"
+                }
+            ]
+        },
+        {
+            "name": "hasResizedThumbnails",
+            "props": [
+                {
+                    "name": "hasResizedThumbnails"
+                }
+            ]
+        },
+        {
+            "name": "_rev",
+            "props": [
+                {
+                    "name": "_rev"
+                }
+            ]
+        }
+    ]
 }

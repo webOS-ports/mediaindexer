@@ -1,12 +1,196 @@
 {
     "id": "com.palm.media.image.album:1",
-    "owner":"org.webosports.mediaindexer",
+    "owner": "org.webosports.mediaindexer",
     "indexes": [
-        { "name": "path", "props": [{"name":"path"}] },
-        { "name": "albumPath", "props": [{"name":"albumPath"}] },
-        { "name": "albumId", "props": [{"name":"albumId"}] },
-        { "name": "albumPathCreatedTime", "props": [{"name":"albumPath"},{"name":"createdTime"}] },
-        { "name": "mediaType", "props": [{"name":"mediaType"}]},
-        { "name": "modifiedTime", "props": [{"name":"modifiedTime"}]}
+        {
+            "name": "path",
+            "props": [
+                {
+                    "name": "path"
+                }
+            ]
+        },
+        {
+            "name": "albumPath",
+            "props": [
+                {
+                    "name": "albumPath"
+                }
+            ]
+        },
+        {
+            "name": "albumId",
+            "props": [
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "albumPathCreatedTime",
+            "props": [
+                {
+                    "name": "albumPath"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "mediaType",
+            "props": [
+                {
+                    "name": "mediaType"
+                }
+            ]
+        },
+        {
+            "name": "modifiedTime",
+            "props": [
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "sortKeyIndex",
+            "props": [
+                {
+                    "collate": "primary",
+                    "name": "sortKey"
+                }
+            ]
+        },
+        {
+            "name": "searchKeyIndex",
+            "props": [
+                {
+                    "collate": "primary",
+                    "name": "searchKey",
+                    "tokenize": "default"
+                }
+            ]
+        },
+        {
+            "name": "name",
+            "props": [
+                {
+                    "name": "name"
+                }
+            ]
+        },
+        {
+            "name": "type",
+            "props": [
+                {
+                    "name": "type"
+                }
+            ]
+        },
+        {
+            "name": "type_modifiedTime",
+            "props": [
+                {
+                    "name": "type"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "accountId",
+            "props": [
+                {
+                    "name": "accountId"
+                }
+            ]
+        },
+        {
+            "name": "toBeDeleted",
+            "props": [
+                {
+                    "name": "toBeDeleted"
+                }
+            ]
+        },
+        {
+            "name": "accountId_modifiedTime",
+            "props": [
+                {
+                    "name": "accountId"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "name_type",
+            "props": [
+                {
+                    "name": "name"
+                },
+                {
+                    "name": "type"
+                }
+            ]
+        },
+        {
+            "name": "showAlbum",
+            "props": [
+                {
+                    "name": "showAlbum"
+                }
+            ]
+        },
+        {
+            "name": "showAlbum_modifiedTime",
+            "props": [
+                {
+                    "name": "showAlbum"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "showAlbum_type_modifiedTime",
+            "props": [
+                {
+                    "name": "showAlbum"
+                },
+                {
+                    "name": "type"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "showAlbum_accountId_modifiedTime",
+            "props": [
+                {
+                    "name": "showAlbum"
+                },
+                {
+                    "name": "accountId"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "_rev",
+            "props": [
+                {
+                    "name": "_rev"
+                }
+            ]
+        }
     ]
 }

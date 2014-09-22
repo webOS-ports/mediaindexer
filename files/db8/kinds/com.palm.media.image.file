@@ -1,8 +1,82 @@
 {
     "id": "com.palm.media.image.file:1",
-    "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"],
+    "owner": "org.webosports.mediaindexer",
+    "extends": [
+        "com.palm.media.file:1"
+    ],
     "indexes": [
-        { "name": "albumId", "props": [{"name":"albumId"}] },
+        {
+            "name": "path",
+            "props": [
+                {
+                    "name": "path"
+                }
+            ]
+        },
+        {
+            "name": "albumId",
+            "props": [
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "albumId_createdTime",
+            "props": [
+                {
+                    "name": "albumId"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "albumPath_createdTime",
+            "props": [
+                {
+                    "name": "albumPath"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "type",
+            "props": [
+                {
+                    "name": "type"
+                }
+            ]
+        },
+        {
+            "name": "appCacheComplete_albumId",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "mediaType",
+            "props": [
+                {
+                    "name": "mediaType"
+                }
+            ]
+        },
+        {
+            "name": "_rev",
+            "props": [
+                {
+                    "name": "_rev"
+                }
+            ]
+        }
     ]
 }

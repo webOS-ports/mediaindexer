@@ -1,5 +1,161 @@
 {
     "id": "com.palm.media.video.file:1",
-    "owner":"org.webosports.mediaindexer",
-    "extends": ["com.palm.media.file:1"]
+    "owner": "org.webosports.mediaindexer",
+    "extends": [
+        "com.palm.media.file:1"
+    ],
+    "indexes": [
+        {
+            "name": "path",
+            "props": [
+                {
+                    "name": "path"
+                }
+            ]
+        },
+        {
+            "name": "albumPath",
+            "props": [
+                {
+                    "name": "albumPath"
+                }
+            ]
+        },
+        {
+            "name": "mediaType",
+            "props": [
+                {
+                    "name": "mediaType"
+                }
+            ]
+        },
+        {
+            "name": "albumPath_createdTime",
+            "props": [
+                {
+                    "name": "albumPath"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "albumId",
+            "props": [
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "capturedOnDevice_albumId",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "appCacheComplete_albumId",
+            "props": [
+                {
+                    "name": "appCacheComplete"
+                },
+                {
+                    "name": "albumId"
+                }
+            ]
+        },
+        {
+            "name": "loadedVidsIndex",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "collate": "primary",
+                    "name": "searchKey",
+                    "tokenize": "default"
+                }
+            ]
+        },
+        {
+            "name": "customCameraIndex",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "name": "albumId"
+                },
+                {
+                    "collate": "primary",
+                    "name": "createdTime",
+                    "tokenize": "default"
+                }
+            ]
+        },
+        {
+            "name": "capturedVidsIndex",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "name": "createdTime"
+                },
+                {
+                    "collate": "primary",
+                    "name": "searchKey",
+                    "tokenize": "default"
+                }
+            ]
+        },
+        {
+            "name": "sideloadedListIndex",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "collate": "primary",
+                    "name": "title"
+                }
+            ]
+        },
+        {
+            "name": "capturedOnDevice_modifiedTime",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "name": "modifiedTime"
+                }
+            ]
+        },
+        {
+            "name": "capturedOnDevice_createdTime",
+            "props": [
+                {
+                    "name": "capturedOnDevice"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
+            "name": "_rev",
+            "props": [
+                {
+                    "name": "_rev"
+                }
+            ]
+        }
+    ]
 }
