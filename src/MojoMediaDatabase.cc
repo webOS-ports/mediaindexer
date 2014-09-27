@@ -228,7 +228,7 @@ public:
         MojString albumPathStr;
         albumPathStr.assign(file.albumPath().c_str());
         MojObject albumPathObj(albumPathStr);
-        query.where("albumPath", MojDbQuery::CompOp::OpEq, albumPathObj);
+        query.where("path", MojDbQuery::CompOp::OpEq, albumPathObj);
 
         MojErr err = database->databaseClient().find(query_album_slot, query);
         ErrorToException(err);
@@ -256,7 +256,7 @@ protected:
         albumObj.putString("_kind", "com.palm.media.image.album:1");
         albumObj.putInt("modifiedTime", file.createdTime());
         albumObj.putString("name", file.albumName().c_str());
-        albumObj.putString("albumPath", file.albumPath().c_str());
+        albumObj.putString("path", file.albumPath().c_str());
         albumObj.putString("searchKey", file.albumName().c_str());
         // FIXME what are the rules to generate a correct sort key?
         albumObj.putString("sortKey", "");
