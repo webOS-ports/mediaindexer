@@ -40,7 +40,7 @@ namespace  mediascanner {
 
 // Increment this whenever changing db schema.
 // It will cause dbstore to rebuild its tables.
-static const int schemaVersion = 3;
+static const int schemaVersion = 4;
 
 static int getSchemaVersion(sqlite3 *db)
 {

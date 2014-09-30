@@ -11,14 +11,6 @@
             ]
         },
         {
-            "name": "albumPath",
-            "props": [
-                {
-                    "name": "albumPath"
-                }
-            ]
-        },
-        {
             "name": "albumId",
             "props": [
                 {
@@ -27,10 +19,10 @@
             ]
         },
         {
-            "name": "albumPathCreatedTime",
+            "name": "pathCreatedTime",
             "props": [
                 {
-                    "name": "albumPath"
+                    "name": "path"
                 },
                 {
                     "name": "createdTime"
