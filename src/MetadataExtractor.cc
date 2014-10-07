@@ -111,7 +111,7 @@ const char *get_filename_extension(const char *filename)
     return dot + 1;
 }
 
-void MetadataExtractor::extractForAudio(const MediaFile &mf, const DetectedFile &d)
+void MetadataExtractor::extractForAudio(MediaFile &mf, const DetectedFile &d)
 {
     TagLib::FileRef file(d.path.c_str());
 
@@ -169,7 +169,7 @@ std::string MetadataExtractor::getAlbumNameFromPath(const std::string& path)
     return path.substr(path.find_last_of("/") + 1, path.size() - 1);
 }
 
-void MetadataExtractor::extractForImage(const MediaFile &mf, const DetectedFile &d)
+void MetadataExtractor::extractForImage(MediaFile &mf, const DetectedFile &d)
 {
     mf.setMediaType("image");
     mf.setAlbumPath(getAlbumPathFromImage(mf.path()));
@@ -186,7 +186,7 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     mf.setEtag(d.etag);
     mf.setType(d.type);
 
-    mf.setName(basename(d.path.c_str()));
+    mf.setName(basename(const_cast<char *>(d.path.c_str())));
     mf.setExtension(get_filename_extension(d.path.c_str()));
 
     // FIXME better take the creation time of the file itself and not when we have discovered the file
