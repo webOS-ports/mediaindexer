@@ -193,8 +193,10 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     mf.setCreatedTime(time(NULL));
 
     struct stat st;
-    if (stat(d.path.c_str(), &st) == 0)
+    if (stat(d.path.c_str(), &st) == 0) {
         mf.setModifiedTime(st.st_mtime);
+        mf.setSize(st.st_size);
+    }
 
     if (d.type == AudioMedia)
         extractForAudio(mf, d);
