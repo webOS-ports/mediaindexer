@@ -186,7 +186,10 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     mf.setEtag(d.etag);
     mf.setType(d.type);
 
-    mf.setName(basename(const_cast<char *>(d.path.c_str())));
+    std::string fileNameWithExtension = basename(const_cast<char *>(d.path.c_str()));
+    std::string pureFileName = fileNameWithExtension.substr(0, fileNameWithExtension.find_last_of("."));
+
+    mf.setName(pureFileName);
     mf.setExtension(get_filename_extension(d.path.c_str()));
 
     // FIXME better take the creation time of the file itself and not when we have discovered the file
