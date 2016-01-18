@@ -22,5 +22,17 @@
             "extend": "allow",
             "delete": "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.types:1",
+        "caller"    : "com.palm.app.photos",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
     }
 ]
