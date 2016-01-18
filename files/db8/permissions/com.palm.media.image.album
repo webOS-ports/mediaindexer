@@ -4,11 +4,23 @@
         "object"    : "com.palm.media.image.album:1",
         "caller"    : "com.palm.systemui",
         "operations": {
-            "read"      : "allow",
+            "read"  : "allow",
             "create": "allow",
             "update": "allow",
             "extend": "allow",
             "delete": "allow"
         }
     },
+	{
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.image.album:1",
+        "caller"    : "com.palm.app.photos",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    }
 ]

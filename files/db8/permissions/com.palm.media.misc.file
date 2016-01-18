@@ -4,7 +4,7 @@
         "object"    : "com.palm.media.misc.file:1",
         "caller"    : "com.palm.systemui",
         "operations": {
-            "read"      : "allow",
+            "read"  : "allow",
             "create": "allow",
             "update": "allow",
             "extend": "allow",
@@ -16,7 +16,7 @@
         "object"    : "com.palm.media.misc.file:1",
         "caller"    : "org.webosports.app.pdf",
         "operations": {
-            "read"      : "allow",
+            "read"  : "allow",
         }
     },
     {
@@ -24,7 +24,7 @@
         "object"    : "com.palm.media.misc.file:1",
         "caller"    : "com.palm.mediapermissions",
         "operations": {
-            "read"      : "allow",
+            "read"  : "allow",
             "create": "allow",
             "update": "allow",
             "extend": "allow",
