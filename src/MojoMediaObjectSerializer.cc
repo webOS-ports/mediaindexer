@@ -69,7 +69,7 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
 		//FIXME title is empty so we use name to get similar results as legacy, should be properly fixed
 		err = obj.putString("title", file.name().c_str());
 		//err = obj.putString("title", file.title().c_str());
-		err = obj.putString("searchKey", file.artist().c_str()+"\t\t"+file.album().c_str()+"\t\t"+file.name().c_str());
+		err = obj.putString("searchKey", (file.artist()+"\t\t"+file.album()+"\t\t"+file.name()).c_str());
 		
         // FIXME sortKey
         // FIXME thumbnails
