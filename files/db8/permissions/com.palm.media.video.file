@@ -1,0 +1,50 @@
+[
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.video.file:1",
+        "caller"    : "com.palm.launcher",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.video.file:1",
+        "caller"    : "com.palm.systemui",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.video.file:1",
+        "caller"    : "com.palm.mediapermissions",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.audio.file:1",
+        "caller"    : "com.palm.app.musicplayer",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    }
+]
