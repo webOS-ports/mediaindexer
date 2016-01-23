@@ -1,0 +1,14 @@
+[
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.music.staticplaylists:1",
+        "caller"    : "com.palm.app.musicplayer",
+        "operations": {
+            "read"  : "allow",
+            "create": "allow",
+            "update": "allow",
+            "extend": "allow",
+            "delete": "allow"
+        }
+    }
+]

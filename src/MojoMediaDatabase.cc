@@ -255,13 +255,17 @@ protected:
         MojObject albumObj;
         albumObj.putString("_kind", "com.palm.media.image.album:1");
         albumObj.putInt("modifiedTime", file.createdTime());
+        //FIXME eventually we'd need to have an accountId in here once we have a working photo service
+        albumObj.putString("accountId", ""));
         albumObj.putString("name", file.albumName().c_str());
         albumObj.putString("path", file.albumPath().c_str());
         albumObj.putString("searchKey", file.albumName().c_str());
-        // FIXME what are the rules to generate a correct sort key?
+        //FIXME we'd need to set this value dynamically sometime
+        albumObj.putBool("showAlbum", true);
+        // FIXME what are the rules to generate a correct sort key? It should be both a numericvalue_searchKey
         albumObj.putString("sortKey", "");
-        // FIXME do we need this one?
-        albumObj.putString("appGridThumbnail", "");
+        //FIXME we'd need to set this value dynamically sometime once we have a working photo service
+        albumObj.putBool("toBeDeleted", false);
 
         MojObject totalObj;
         // image count update will be triggered by the AssignImageToAlbumCommand later
