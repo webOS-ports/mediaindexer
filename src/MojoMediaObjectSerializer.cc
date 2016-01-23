@@ -48,11 +48,13 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         discObj.putInt("total", file.discTotal());
         err = obj.put("disc", discObj);
 
+        std::string strDiscPos = std::to_string(file.discPosition()*100000+file.trackPosition());
+
         MojObject sortKeyObj(MojObject::Type::TypeObject);
-        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+file.album()+"\t\t"+((file.discPosition()*100000).c_str())+(file.trackPosition().c_str())).c_str());
-        sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+((file.discPosition()*100000).c_str())+(file.trackPosition().c_str())).c_str());
-        sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+file.album()+"\t\t"+((file.discPosition()*100000).c_str())+(file.trackPosition().c_str())).c_str());
-        sortKeyObj.putString("trackAndDisc", (((file.discPosition()*100000).c_str())+(file.trackPosition().c_str())).c_str());
+        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
+        sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+strDiscPos).c_str());
+        sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
+        sortKeyObj.putString("trackAndDisc", strDiscPos.c_str());
         err = obj.put("sortKey", sortKeyObj);
 
 		
