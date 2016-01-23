@@ -256,7 +256,7 @@ protected:
         albumObj.putString("_kind", "com.palm.media.image.album:1");
         albumObj.putInt("modifiedTime", file.createdTime());
         //FIXME eventually we'd need to have an accountId in here once we have a working photo service
-        albumObj.putString("accountId", ""));
+        albumObj.putString("accountId", "");
         albumObj.putString("name", file.albumName().c_str());
         albumObj.putString("path", file.albumPath().c_str());
         albumObj.putString("searchKey", file.albumName().c_str());
