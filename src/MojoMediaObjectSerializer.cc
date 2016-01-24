@@ -111,7 +111,10 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
     else if (file.type() == MediaType::MiscMedia) {
         err = obj.putString("_kind", "com.palm.media.misc.file:1");
         err = obj.putString("extension", file.extension().c_str());
-    }
+		err = obj.putInt("modifiedTime", file.modifiedTime());
+		err = obj.putString("searchKey", file.name().c_str());
+		err = obj.putString("name", file.name().c_str());
+	}
 }
 
 } // mediascanner

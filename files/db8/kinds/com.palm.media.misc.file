@@ -21,6 +21,14 @@
                 }
             ]
         },
+	    {
+            "name": "byExt",
+            "props": [
+                {
+                    "name": "extension"
+                }
+            ]
+        },
         {
             "name": "byPathAndRev",
             "props": [
