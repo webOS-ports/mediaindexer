@@ -40,6 +40,7 @@ MediaFile::MediaFile() :
     _genre("Unknown Genre"),
     _artist("Unknown Artist"),
     _albumArtist("Unknown Artist"),
+    _title("Unknown Title"),
     _duration(0),
     _bookmark(0),
     _isRingtone(false),

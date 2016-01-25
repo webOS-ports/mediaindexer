@@ -48,31 +48,32 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         discObj.putInt("total", file.discTotal());
         err = obj.put("disc", discObj);
 
-        std::string strDiscPos = std::to_string(file.discPosition()*100000+file.trackPosition());
+        std::string strDiscPos = std::to_string(file.discPosition()*100000);
+        std::string strTrackPos = std::to_string(file.trackPosition());
 
         MojObject sortKeyObj(MojObject::Type::TypeObject);
-        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
-        sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+strDiscPos).c_str());
-        sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
-        sortKeyObj.putString("trackAndDisc", strDiscPos.c_str());
+        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+file.album()+"\t\t"+strDiscPos+strTrackPos).c_str());
+        sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+strDiscPos+strTrackPos).c_str());
+        sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+file.album()+"\t\t"+strDiscPos+strTrackPos).c_str());
+        sortKeyObj.putString("trackAndDisc", (strDiscPos+strTrackPos).c_str());
         err = obj.put("sortKey", sortKeyObj);
-
-		
+        
         err = obj.putString("title", file.title().c_str());
         err = obj.putString("genre", file.genre().c_str());
         err = obj.putString("artist", file.artist().c_str());
-
         err = obj.putInt("duration", file.duration());
         err = obj.putInt("bookmark", file.bookmark());
         err = obj.putBool("isRingtone", file.isRingtone());
-
         err = obj.putBool("serviced", file.serviced());
         err = obj.putBool("hasResizedThumbnails", file.hasResizedThumbnails());
-		//FIXME title is empty so we use name to get similar results as legacy, should be properly fixed
-        err = obj.putString("title", file.name().c_str());
-		//err = obj.putString("title", file.title().c_str());
-        err = obj.putString("searchKey", (file.artist()+"\t\t"+file.album()+"\t\t"+file.name()).c_str());
-        // FIXME thumbnails
+        err = obj.putString("searchKey", (file.artist()+"\t\t"+file.album()+"\t\t"+file.title()).c_str());
+        // FIXME thumbnails, seems TagLib might not support embedded images in files? Just added an empty tag for now.
+        MojObject thumbObj(MojObject::Type::TypeObject);
+        //thumbObj.putString("_id", "");
+        //thumbObj.putString("data", ""); //Should be path to the thumbnail:offset inside file:thumbsize. For example: "/media/internal/test.mp3:282:38326" 
+        //Legacy: var thumbUri = path + ":" + apic.thumbOffset + ":" + apic.thumbSize;
+        //thumbObj.putString("type", "embedded"); //Should always be embedded for audio files
+        err = obj.put("thumbnails", thumbObj);
     }
     else if (file.type() == MediaType::VideoMedia) {
         err = obj.putString("_kind", "com.palm.media.video.file:1");
@@ -88,13 +89,11 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("mediaType", file.mediaType().c_str());
         err = obj.putInt("modifiedTime", file.modifiedTime());
         err = obj.putBool("appCacheCompleted", file.appCacheCompleted());
-        //FIXME title is empty so we use name to get similar results as legacy, should be properly fixed
-        err = obj.putString("searchKey", file.name().c_str());
-        err = obj.putString("title", file.name().c_str());
-        //err = obj.putString("title", file.title().c_str());
-		
-        // FIXME thumbnails
-
+        err = obj.putString("searchKey", file.title().c_str());
+        err = obj.putString("title", file.title().c_str());
+        // FIXME add thumbnails, just empty tag for now
+        MojObject thumbObj(MojObject::Type::TypeObject);
+        err = obj.put("thumbnails", thumbObj);
         err = obj.putString("type", "local");
     }
     else if (file.type() == MediaType::ImageMedia) {
@@ -104,16 +103,17 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("albumPath", file.albumPath().c_str());
         err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("mediaType", file.mediaType().c_str());
-        // FIXME thumbnails
-
         err = obj.putString("type", "local");
-    }
+        // FIXME add thumbnails, just empty tag for now
+        MojObject thumbObj(MojObject::Type::TypeObject);
+        err = obj.put("thumbnails", thumbObj);
+	}
     else if (file.type() == MediaType::MiscMedia) {
         err = obj.putString("_kind", "com.palm.media.misc.file:1");
         err = obj.putString("extension", file.extension().c_str());
-		err = obj.putInt("modifiedTime", file.modifiedTime());
-		err = obj.putString("searchKey", file.name().c_str());
-		err = obj.putString("name", file.name().c_str());
+        err = obj.putInt("modifiedTime", file.modifiedTime());
+        err = obj.putString("searchKey", file.name().c_str());
+        err = obj.putString("name", file.name().c_str());
 	}
 }
 
