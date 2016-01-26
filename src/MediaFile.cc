@@ -35,7 +35,7 @@ MediaFile::MediaFile() :
     _searchKey(""),
     _trackPosition(0),
     _trackTotal(0),
-    _discPosition(0),
+    _discPosition(1),
     _discTotal(0),
     _genre("Unknown Genre"),
     _artist("Unknown Artist"),
