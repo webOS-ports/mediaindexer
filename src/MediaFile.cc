@@ -53,7 +53,7 @@ MediaFile::MediaFile() :
     _appCacheCompleted(true),
     _albumId(""),
     _albumPath(""),
-    _albumName(""),
+    _albumName("Unknown Album"),
     _lastPlayTime(0),
     _year(0)
 {
