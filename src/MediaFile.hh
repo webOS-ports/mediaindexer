@@ -69,7 +69,6 @@ public:
     unsigned int lastPlayTime() const noexcept { return _lastPlayTime; }
     std::string albumId() const noexcept { return _albumId; }
     std::string albumPath() const noexcept { return _albumPath; }
-    std::string albumName() const noexcept { return _albumName; }
 
     unsigned int year() const noexcept { return _year; }
 
@@ -108,7 +107,6 @@ public:
     void setAppCacheCompleted(bool value) { _appCacheCompleted = value; }
     void setAlbumId(const std::string& value) { _albumId = value; }
     void setAlbumPath(const std::string& value) { _albumPath = value; }
-    void setAlbumName(const std::string& value) { _albumName = value; }
 
     void setYear(unsigned int value) { _year = value; }
 
@@ -150,7 +148,6 @@ private:
     std::string _albumId;
     std::string _albumPath;
     unsigned int _lastPlayTime;
-    std::string _albumName;
 
     unsigned int _year;
 };
