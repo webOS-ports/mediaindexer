@@ -116,18 +116,26 @@ void MetadataExtractor::extractForAudio(MediaFile &mf, const DetectedFile &d)
     TagLib::FileRef file(d.path.c_str());
 
     if (!file.isNull()) {
-        mf.setAlbum(file.tag()->album().toCString());
-        mf.setArtist(file.tag()->artist().toCString());
-        mf.setTitle(file.tag()->title().toCString());
-        mf.setGenre(file.tag()->genre().toCString());
-        mf.setTrackPosition(file.tag()->track());
-        mf.setYear(file.tag()->year());
 
         TagLib::PropertyMap tags = file.file()->properties();
+
+        if (tags.contains("ALBUM"))
+            mf.setAlbum(file.tag()->album().toCString());
+        if (tags.contains("ARTIST"))
+            mf.setArtist(file.tag()->artist().toCString());
+        if (tags.contains("TITLE"))
+            mf.setTitle(file.tag()->title().toCString());
+        if (tags.contains("GENRE"))
+            mf.setGenre(file.tag()->genre().toCString());
+        mf.setTrackPosition(file.tag()->track());
+        mf.setYear(file.tag()->year());
 
         if (tags.contains("ALBUMARTIST")) {
             TagLib::StringList values = tags["ALBUMARTIST"];
              mf.setAlbumArtist(values.toString(", ").toCString());
+        }
+        else {
+            mf.setAlbumArtist(mf.artist());
         }
 
         if (tags.contains("TRACKNUMBER")) {
@@ -173,7 +181,7 @@ void MetadataExtractor::extractForImage(MediaFile &mf, const DetectedFile &d)
 {
     mf.setMediaType("image");
     mf.setAlbumPath(getAlbumPathFromImage(mf.path()));
-    mf.setAlbumName(getAlbumNameFromPath(mf.albumPath()));
+    mf.setAlbum(getAlbumNameFromPath(mf.albumPath()));
 
     // FIXME once we have exif detection override createdTime here with the correct value
     // mf.setCreatedTime(0);

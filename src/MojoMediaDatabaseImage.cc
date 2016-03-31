@@ -158,9 +158,9 @@ protected:
         albumObj.putInt("modifiedTime", file.createdTime());
         //FIXME eventually we'd need to have an accountId in here once we have a working photo service
         albumObj.putString("accountId", "");
-        albumObj.putString("name", file.albumName().c_str());
+        albumObj.putString("name", file.albu().c_str());
         albumObj.putString("path", file.albumPath().c_str());
-        albumObj.putString("searchKey", file.albumName().c_str());
+        albumObj.putString("searchKey", file.album().c_str());
         //FIXME we'd need to set this value dynamically sometime
         albumObj.putBool("showAlbum", true);
         // FIXME what are the rules to generate a correct sort key? It should be both a numericvalue_searchKey
