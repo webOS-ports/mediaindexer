@@ -251,7 +251,7 @@ public:
         g_checksum_get_digest(checksum, digest, &digest_len);
 
         std::string file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
-        std::string thumbnailPath = g_build_filename(THUMBNAIL_DIR, file.c_str());
+        std::string thumbnailPath = g_build_filename(THUMBNAIL_DIR, file.c_str(), NULL);
 
         if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
             g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
