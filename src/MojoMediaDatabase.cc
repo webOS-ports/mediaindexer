@@ -486,6 +486,15 @@ MojoMediaDatabase::MojoMediaDatabase(MojDbServiceClient& dbclient) :
 {
 }
 
+MojoMediaDatabase::~MojoMediaDatabase()
+{
+    resetQueue();
+    if (previousCommand)
+        delete previousCommand;
+    if (currentCommand)
+        delete currentCommand;
+}
+
 MojDbServiceClient& MojoMediaDatabase::databaseClient() const
 {
     return dbclient;
