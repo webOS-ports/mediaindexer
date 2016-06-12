@@ -250,8 +250,9 @@ public:
         gsize digest_len = sizeof (digest);
         g_checksum_get_digest(checksum, digest, &digest_len);
 
-        std::string file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
-        std::string thumbnailPath = g_build_filename(THUMBNAIL_DIR, file.c_str(), NULL);
+        char *file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
+        char *thumbnailPath = g_build_filename(THUMBNAIL_DIR, file, NULL);
+        g_checksum_free(checksum);
 
         if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
             g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
@@ -259,14 +260,14 @@ public:
         int gridUnit = Settings::LunaSettings()->gridUnit;
         QImage origImage(QString::fromStdString(imagePath));
         QImage thumbnailImage = origImage.scaledToWidth((gridUnit * 8), Qt::SmoothTransformation);
-        thumbnailImage.save(QString::fromStdString(thumbnailPath));
+        thumbnailImage.save(QString(thumbnailPath));
 
         MojObject toMerge;
         toMerge.put("_id", imageId);
 
 
         MojObject appGridThumbnail;
-        appGridThumbnail.putString("path", thumbnailPath.c_str());
+        appGridThumbnail.putString("path", thumbnailPath);
         appGridThumbnail.putBool("cached", true);
 
         MojObject dimensions;
@@ -286,6 +287,9 @@ public:
 
         MojErr err = database->databaseClient().merge(update_image_slot, objects.begin(), objects.end());
         ErrorToException(err);
+
+        g_free(file);
+        g_free(thumbnailPath);
     }
 
 protected:

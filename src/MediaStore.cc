@@ -111,6 +111,10 @@ MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
 
 MediaStore::~MediaStore()
 {
+    int err = sqlite3_close(mFileDb);
+    if (err != SQLITE_OK) {
+        g_warning("Could not close database connection: %s", sqlite3_errmsg(mFileDb));
+    }
 }
 
 void MediaStore::insert(const MediaFile &m)

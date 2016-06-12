@@ -30,6 +30,7 @@ class MojoMediaDatabase
 {
 public:
     MojoMediaDatabase(MojDbServiceClient& dbclient);
+    ~MojoMediaDatabase();
 
     void insert(const mediascanner::MediaFile& file);
     void remove(const std::string& filename);
