@@ -16,7 +16,7 @@
         "object"    : "com.palm.media.misc.file:1",
         "caller"    : "org.webosports.app.pdf",
         "operations": {
-            "read"  : "allow",
+            "read"  : "allow"
         }
     },
     {
