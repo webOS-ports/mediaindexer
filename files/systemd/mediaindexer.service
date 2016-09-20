@@ -1,7 +1,7 @@
 [Unit]
 Description=Media indexing service
 Requires=ls-hubd_private.service ls-hubd_public.service
-After=ls-hubd_private.service ls-hubd_public.service
+After=ls-hubd_private.service ls-hubd_public.service configurator.service
 
 [Service]
 Type=simple
