@@ -14,7 +14,7 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.from("com.palm.media.image.file:1");
-        query.where("albumId", MojDbQuery::CompOp::OpEq, albumId);
+        query.where("albumId", MojDbQuery::OpEq, albumId);
 
         MojErr err = database->databaseClient().find(query_images_slot, query);
         ErrorToException(err);
@@ -129,7 +129,7 @@ public:
         MojString albumPathStr;
         albumPathStr.assign(file.albumPath().c_str());
         MojObject albumPathObj(albumPathStr);
-        query.where("path", MojDbQuery::CompOp::OpEq, albumPathObj);
+        query.where("path", MojDbQuery::OpEq, albumPathObj);
 
         MojErr err = database->databaseClient().find(query_album_slot, query);
         ErrorToException(err);

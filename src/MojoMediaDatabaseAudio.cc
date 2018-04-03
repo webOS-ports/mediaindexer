@@ -15,8 +15,8 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.from("com.palm.media.audio.file:1");
-        query.where("isRingtone", MojDbQuery::CompOp::OpEq, MojObject(false));
-        query.where("album", MojDbQuery::CompOp::OpEq, albumName, MojDbCollationPrimary);
+        query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
+        query.where("album", MojDbQuery::OpEq, albumName, MojDbCollationPrimary);
 
         MojErr err = database->databaseClient().find(query_audios_slot, query);
         ErrorToException(err);
@@ -91,7 +91,7 @@ public:
         MojString albumStr;
         albumStr.assign(file.album().c_str());
         albumName = MojObject(albumStr);
-        query.where("name", MojDbQuery::CompOp::OpEq, albumName, MojDbCollationPrimary);
+        query.where("name", MojDbQuery::OpEq, albumName, MojDbCollationPrimary);
 
         MojErr err = database->databaseClient().find(query_album_slot, query);
         ErrorToException(err);
@@ -203,8 +203,8 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.from("com.palm.media.audio.file:1");
-        query.where("isRingtone", MojDbQuery::CompOp::OpEq, MojObject(false));
-        query.where("genre", MojDbQuery::CompOp::OpEq, genreName);
+        query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
+        query.where("genre", MojDbQuery::OpEq, genreName);
 
         MojErr err = database->databaseClient().find(query_audios_file_slot, query);
         ErrorToException(err);
@@ -212,7 +212,7 @@ public:
         MojDbQuery query_album;
         query_album.select("_id");
         query_album.from("com.palm.media.audio.album:1");
-        query_album.where("genre", MojDbQuery::CompOp::OpEq, genreName);
+        query_album.where("genre", MojDbQuery::OpEq, genreName);
 
         err = database->databaseClient().find(query_audios_album_slot, query_album);
         ErrorToException(err);
@@ -315,7 +315,7 @@ public:
         MojString genreStr;
         genreStr.assign(file.genre().c_str());
         genreName = MojObject(genreStr);
-        query.where("name", MojDbQuery::CompOp::OpEq, genreName, MojDbCollationPrimary);
+        query.where("name", MojDbQuery::OpEq, genreName, MojDbCollationPrimary);
 
         MojErr err = database->databaseClient().find(query_genre_slot, query);
         ErrorToException(err);
@@ -426,8 +426,8 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.from("com.palm.media.audio.file:1");
-        query.where("isRingtone", MojDbQuery::CompOp::OpEq, MojObject(false));
-        query.where("artist", MojDbQuery::CompOp::OpEq, artistName);
+        query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
+        query.where("artist", MojDbQuery::OpEq, artistName);
 
         MojErr err = database->databaseClient().find(query_audios_file_slot, query);
         ErrorToException(err);
@@ -435,7 +435,7 @@ public:
         MojDbQuery query_album;
         query_album.select("_id");
         query_album.from("com.palm.media.audio.album:1");
-        query_album.where("artist", MojDbQuery::CompOp::OpEq, artistName);
+        query_album.where("artist", MojDbQuery::OpEq, artistName);
 
         err = database->databaseClient().find(query_audios_album_slot, query_album);
         ErrorToException(err);
@@ -538,7 +538,7 @@ public:
         MojString artistStr;
         artistStr.assign(file.artist().c_str());
         artistName = MojObject(artistStr);
-        query.where("name", MojDbQuery::CompOp::OpEq, artistName, MojDbCollationPrimary);
+        query.where("name", MojDbQuery::OpEq, artistName, MojDbCollationPrimary);
 
         MojErr err = database->databaseClient().find(query_artist_slot, query);
         ErrorToException(err);

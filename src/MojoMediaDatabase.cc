@@ -122,7 +122,7 @@ public:
         MojString filenameStr;
         filenameStr.assign(file.path().c_str());
         MojObject filenameObj(filenameStr);
-        query.where("path", MojDbQuery::CompOp::OpEq, filenameObj);
+        query.where("path", MojDbQuery::OpEq, filenameObj);
 
         MojErr err = database->databaseClient().find(find_existing_slot, query);
         ErrorToException(err);
@@ -230,7 +230,7 @@ public:
         MojString filenameStr;
         filenameStr.assign(filename.c_str());
         MojObject filenameObj(filenameStr);
-        query.where("path", MojDbQuery::CompOp::OpEq, filenameObj);
+        query.where("path", MojDbQuery::OpEq, filenameObj);
 
         MojErr err = database->databaseClient().find(query_removal_slot, query);
         ErrorToException(err);
@@ -268,7 +268,7 @@ protected:
             ErrorToException(err);
         }
 
-        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDb::FlagPurge);
+        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
         ErrorToException(err);
 
         return MojErrNone;
@@ -345,7 +345,7 @@ protected:
             ErrorToException(err);
         }
 
-        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDb::FlagPurge);
+        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
         ErrorToException(err);
 
         return MojErrNone;

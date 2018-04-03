@@ -18,6 +18,7 @@
 #define MOJOMEDIADATABASE_H
 
 #include <db/MojDbServiceClient.h>
+#include "db/MojDb.h"
 #include <deque>
 
 namespace mediascanner
