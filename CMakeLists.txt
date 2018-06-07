@@ -70,11 +70,10 @@ file(GLOB SOURCES
     src/mozilla/Normalize.c)
 
 add_executable(mediaindexer ${SOURCES})
-qt5_use_modules(mediaindexer Gui)
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} ${PBNJSON_CPP_LDFLAGS}
     ${GIO2_LDFLAGS} ${GIO-UNIX_LDFLAGS} ${GOBJECT2_LDFLAGS} ${SQLITE3_LDFLAGS}
-    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} ${LUNA_SYSMGR_COMMON_LDFLAGS} rt pthread)
+    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} ${LUNA_SYSMGR_COMMON_LDFLAGS} Qt5::Gui rt pthread)
 
 webos_build_daemon()
 webos_build_system_bus_files()
