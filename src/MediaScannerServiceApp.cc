@@ -36,6 +36,7 @@ MediaScannerServiceApp::MediaScannerServiceApp() :
 
     ignoredDirectories.insert(THUMBNAIL_DIR);
     ignoredDirectories.insert("/media/internal/android/Android");
+    ignoredDirectories.insert("/media/internal/.cache");
 }
 
 MojErr MediaScannerServiceApp::open()
