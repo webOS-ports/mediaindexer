@@ -1,0 +1,12 @@
+{
+    "exeName":"@WEBOS_INSTALL_SBINDIR@/mediaindexer",
+    "type": "privileged",
+    "allowedNames": ["org.webosports.mediaindexer"],
+    "permissions": [
+        {
+            "service":"org.webosports.mediaindexer",
+            "inbound":["*"],
+            "outbound":["*"]
+        }
+    ]
+}
