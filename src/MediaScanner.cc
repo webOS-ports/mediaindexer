@@ -30,6 +30,7 @@
 #include<memory>
 #include<cassert>
 #include <dirent.h>
+#include <stdexcept>
 
 #include<glib.h>
 #include<glib-unix.h>
