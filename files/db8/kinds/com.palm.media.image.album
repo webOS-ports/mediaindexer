@@ -1,6 +1,6 @@
 {
     "id": "com.palm.media.image.album:1",
-    "owner": "org.webosports.mediaindexer",
+    "owner": "org.webosports.service.mediaindexer",
     "indexes": [
         {
             "name": "path",

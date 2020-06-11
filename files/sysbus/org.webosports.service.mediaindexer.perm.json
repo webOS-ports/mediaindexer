@@ -1,0 +1,7 @@
+{
+    "org.webosports.service.mediaindexer": [
+        "services",
+        "database",
+        "database.internal"
+    ]
+}
