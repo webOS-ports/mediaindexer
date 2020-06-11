@@ -1,6 +1,6 @@
 {
     "id": "com.palm.media.misc.file:1",
-    "owner": "org.webosports.mediaindexer",
+    "owner": "org.webosports.service.mediaindexer",
     "extends": [
         "com.palm.media.file:1"
     ],

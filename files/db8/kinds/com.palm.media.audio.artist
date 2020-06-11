@@ -1,6 +1,6 @@
 {
     "id": "com.palm.media.audio.artist:1",
-    "owner": "org.webosports.mediaindexer",
+    "owner": "org.webosports.service.mediaindexer",
     "indexes": [
         {
             "name": "artistname",

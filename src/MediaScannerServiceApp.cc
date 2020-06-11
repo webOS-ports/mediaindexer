@@ -24,7 +24,7 @@ int main(int argc, char** argv)
     return app.main(argc, argv);
 }
 
-const char* const MediaScannerServiceApp::ServiceName = "org.webosports.mediaindexer";
+const char* const MediaScannerServiceApp::ServiceName = "org.webosports.service.mediaindexer";
 
 MediaScannerServiceApp::MediaScannerServiceApp() :
     db_client(&service),

@@ -1,5 +1,5 @@
 [Unit]
-Description=Media indexing service
+Description=LuneOS Media Indexing Service
 Requires=ls-hubd.service
 After=ls-hubd.service configurator.service
 
