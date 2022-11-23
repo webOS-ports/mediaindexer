@@ -1,7 +1,5 @@
 {
     "org.webosports.service.mediaindexer": [
-        "services",
-        "database",
-        "database.internal"
+        "database.operation"
     ]
 }
