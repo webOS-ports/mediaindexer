@@ -20,6 +20,7 @@
 #ifndef MEDIAFILE_HH
 #define MEDIAFILE_HH
 
+#include <cstdint>
 #include <string>
 #include <list>
 
