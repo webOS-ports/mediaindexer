@@ -44,13 +44,14 @@ pkg_check_modules(LUNA_SYSMGR_COMMON LunaSysMgrCommon REQUIRED)
 include_directories(${LUNA_SYSMGR_COMMON_INCLUDE_DIRS})
 webos_add_compiler_flags(ALL ${LUNA_SYSMGR_COMMON_CFLAGS})
 
-find_package(Qt5Gui REQUIRED)
-if(NOT Qt5Gui_FOUND)
-    message(FATAL_ERROR "Qt5Gui module is required!")
+find_package(Qt6 COMPONENTS Gui )
+if (NOT Qt6_FOUND)
+    find_package(Qt5 5.15 REQUIRED COMPONENTS Gui)
 endif()
 
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 webos_add_compiler_flags(ALL "-DMOJ_LINUX")
 
 file(GLOB SOURCES
@@ -73,7 +74,7 @@ add_executable(mediaindexer ${SOURCES})
 target_link_libraries(mediaindexer
     ${GLIB2_LDFLAGS} ${LUNASERVICE2_LDFLAGS} ${PBNJSON_CPP_LDFLAGS}
     ${GIO2_LDFLAGS} ${GIO-UNIX_LDFLAGS} ${GOBJECT2_LDFLAGS} ${SQLITE3_LDFLAGS}
-    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} ${LUNA_SYSMGR_COMMON_LDFLAGS} Qt5::Gui rt pthread)
+    ${MOJODB_LDFLAGS} ${TAGLIB_LDFLAGS} ${LUNA_SYSMGR_COMMON_LDFLAGS} Qt::Gui rt pthread)
 
 webos_build_daemon()
 webos_build_system_bus_files()
