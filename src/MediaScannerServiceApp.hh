@@ -25,6 +25,7 @@
 
 #include "MediaScanner.hh"
 #include "MojoMediaDatabase.hh"
+#include "PermissionGrants.hh"
 
 #include <set>
 #include <string>
@@ -46,6 +47,7 @@ private:
     MojLunaService service;
     MojDbServiceClient db_client;
     MojoMediaDatabase database;
+    MojRefCountedPtr<PermissionGrantHandler> grants;
     MediaScanner media_scanner;
     std::string rootPath;
     std::set<std::string> ignoredDirectories;

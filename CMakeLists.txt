@@ -64,6 +64,8 @@ file(GLOB SOURCES
     src/MediaScannerServiceApp.cc
     src/MojoMediaDatabase.cc
     src/MojoMediaObjectSerializer.cc
+    src/PermissionGrants.cc
+    src/PermissionRules.cc
     src/SubtreeWatcher.cc
     src/util.cc
     src/utils.cc
@@ -78,3 +80,9 @@ target_link_libraries(mediaindexer
 
 webos_build_daemon()
 webos_build_system_bus_files()
+
+option(BUILD_TESTING "Build the unit tests" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

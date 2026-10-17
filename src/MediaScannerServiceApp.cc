@@ -54,6 +54,12 @@ MojErr MediaScannerServiceApp::open()
     err = service.open(ServiceName);
     MojErrCheck(err);
 
+    // grantRead, for com.palm.mediapermissions once the user has said yes
+    grants.reset(new PermissionGrantHandler(db_client));
+    MojAllocCheck(grants.get());
+    err = service.addCategory(MojService::DefaultCategory, grants.get());
+    MojErrCheck(err);
+
     err = service.attach(m_reactor.impl());
     MojErrCheck(err);
 
