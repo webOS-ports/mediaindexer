@@ -77,6 +77,12 @@
                     "name": "_rev"
                 }
             ]
+        },
+        {
+            "name": "modifiedTime",
+            "props": [
+                { "name": "modifiedTime" }
+            ]
         }
     ]
 }

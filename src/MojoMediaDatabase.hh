@@ -38,6 +38,9 @@ public:
     void insert(const mediascanner::MediaFile& file);
     void remove(const std::string& filename);
     void prepareForRebuild(bool withSchemaRebuild);
+    // Puts the kinds and their permissions as /etc/palm/db has them, so that
+    // new indexes and readers reach the database without a rebuild
+    void updateKinds();
 
     MojDbServiceClient& databaseClient() const;
 

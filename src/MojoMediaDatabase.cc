@@ -807,18 +807,21 @@ void MojoMediaDatabase::prepareForRebuild(bool withSchemaRebuild)
         enqueue(new RemoveKindCommand(this, "com.palm.media.file"));
         enqueue(new RemoveKindCommand(this, "com.palm.media.types"));
 
-        enqueue(new PutKindCommand(this, "com.palm.media.types"));
-        enqueue(new PutKindCommand(this, "com.palm.media.audio.file"));
-        enqueue(new PutKindCommand(this, "com.palm.media.misc.file"));
-        enqueue(new PutKindCommand(this, "com.palm.media.video.file"));
-        enqueue(new PutKindCommand(this, "com.palm.media.playlist.file"));
-        enqueue(new PutKindCommand(this, "com.palm.media.image.file"));
-        enqueue(new PutKindCommand(this, "com.palm.media.audio.album"));
-        enqueue(new PutKindCommand(this, "com.palm.media.audio.genre"));
-        enqueue(new PutKindCommand(this, "com.palm.media.audio.artist"));
-        enqueue(new PutKindCommand(this, "com.palm.media.image.album"));
-        enqueue(new PutKindCommand(this, "com.palm.media.file"));
+        updateKinds();
     }
+}
+
+void MojoMediaDatabase::updateKinds()
+{
+    // The base kinds first: the others extend them
+    static const char* const kinds[] = {
+        "com.palm.media.types", "com.palm.media.file", "com.palm.media.audio.file",
+        "com.palm.media.misc.file", "com.palm.media.video.file", "com.palm.media.playlist.file",
+        "com.palm.media.image.file", "com.palm.media.audio.album", "com.palm.media.audio.genre",
+        "com.palm.media.audio.artist", "com.palm.media.image.album"
+    };
+    for (const char* kind : kinds)
+        enqueue(new PutKindCommand(this, kind));
 }
 
 } // namespace mediascanner

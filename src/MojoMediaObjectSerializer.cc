@@ -29,6 +29,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
 
     err = obj.putString("path", file.path().c_str());
     err = obj.putInt("size", file.size());
+    // As the shared MIME database names it ("application/pdf"): what apps
+    // ask for, rather than file name extensions
+    err = obj.putString("mimeType", file.mimeType().c_str());
 
     if (file.type() == MediaType::AudioMedia) {
         err = obj.putString("_kind", "com.palm.media.audio.file:1");

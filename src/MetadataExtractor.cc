@@ -193,6 +193,7 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     mf.setPath(d.path);
     mf.setEtag(d.etag);
     mf.setType(d.type);
+    mf.setMimeType(d.content_type);
 
     std::string fileNameWithExtension = basename(const_cast<char *>(d.path.c_str()));
     std::string pureFileName = fileNameWithExtension.substr(0, fileNameWithExtension.find_last_of("."));

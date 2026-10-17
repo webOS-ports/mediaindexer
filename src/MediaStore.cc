@@ -40,7 +40,15 @@ namespace  mediascanner {
 
 // Increment this whenever changing db schema.
 // It will cause dbstore to rebuild its tables.
-static const int schemaVersion = 5;
+static const int schemaVersion = 6;
+
+// Versions whose db8 entries only lack fields added since: for those the file
+// list alone is rebuilt, every file is read again and its entry updated, and
+// what apps stored in the entries is kept. (6 added mimeType.)
+static bool entriesStillUsable(int version)
+{
+    return version == 5;
+}
 
 static int getSchemaVersion(sqlite3 *db)
 {
@@ -102,10 +110,12 @@ MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
         return;
     }
 
-    if (getSchemaVersion(mFileDb) != schemaVersion) {
+    int version = getSchemaVersion(mFileDb);
+    if (version != schemaVersion) {
         deleteTables(mFileDb);
         createTables(mFileDb);
-        mMojoDb->prepareForRebuild(true);
+        if (!entriesStillUsable(version))
+            mMojoDb->prepareForRebuild(true);
     }
 }
 

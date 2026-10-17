@@ -83,6 +83,33 @@
                     "collate": "primary"
                 }
             ]
+        },
+        {
+            "name": "mimeType_name",
+            "props": [
+                { "name": "mimeType" },
+                { "name": "name" }
+            ]
+        },
+        {
+            "name": "modifiedTime",
+            "props": [
+                { "name": "modifiedTime" }
+            ]
+        },
+        {
+            "name": "mimeType_modifiedTime",
+            "props": [
+                { "name": "mimeType" },
+                { "name": "modifiedTime" }
+            ]
+        },
+        {
+            "name": "extension_modifiedTime",
+            "props": [
+                { "name": "extension" },
+                { "name": "modifiedTime" }
+            ]
         }
     ]
 }

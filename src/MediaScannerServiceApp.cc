@@ -57,6 +57,9 @@ MojErr MediaScannerServiceApp::open()
     err = service.attach(m_reactor.impl());
     MojErrCheck(err);
 
+    // Before any entry is written: new indexes and readers of the kinds
+    database.updateKinds();
+
     media_scanner.setup(ignoredDirectories);
     media_scanner.addDir(rootPath);
     media_scanner.addDir(WallpaperPath);
