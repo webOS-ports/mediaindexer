@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <set>
 
 #include <glib.h>
 
@@ -153,9 +154,17 @@ void MediaStore::insert(const MediaFile &m)
     // The file counts as indexed once db8 has its entry. Recorded before,
     // an insert that failed, or did not run because the indexer stopped
     // with it still queued, left the file out of db8 until it changed.
+    // Until then it is pending: a folder removed meanwhile takes it along,
+    // and a removal of the file keeps it from being recorded.
     const string path = m.path();
     const string etag = m.etag();
-    mMojoDb->insert(m, [this, path, etag]() {
+    const unsigned long insertNumber = ++mNextInsert;
+    mPendingInserts[path] = insertNumber;
+    mMojoDb->insert(m, [this, path, etag, insertNumber]() {
+        auto pending = mPendingInserts.find(path);
+        if (pending == mPendingInserts.end() || pending->second != insertNumber)
+            return;
+        mPendingInserts.erase(pending);
         try {
             setETag(path, etag);
         } catch (const exception &e) {
@@ -174,6 +183,8 @@ void MediaStore::setETag(const string &path, const string &etag)
 
 void MediaStore::remove(const string &filename)
 {
+    mPendingInserts.erase(filename);
+
     Statement del(mFileDb, "DELETE FROM files WHERE path = ?");
     del.bind(1, filename);
     del.step();
@@ -197,6 +208,15 @@ std::vector<std::string> MediaStore::filesBelowPath(const string &path)
     std::vector<std::string> paths;
     while (query.step())
         paths.push_back(query.getText(0));
+
+    // And the files on their way to db8: their entries are made after this,
+    // under a path that may be gone by then
+    const std::set<std::string> recorded(paths.begin(), paths.end());
+    for (auto it = mPendingInserts.lower_bound(prefix);
+         it != mPendingInserts.end() && it->first.compare(0, prefix.size(), prefix) == 0; ++it) {
+        if (recorded.find(it->first) == recorded.end())
+            paths.push_back(it->first);
+    }
     return paths;
 }
 
