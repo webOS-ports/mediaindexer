@@ -139,13 +139,20 @@ void MediaStore::remove(const string &filename)
 
 void MediaStore::removeFilesBelowPath(const string &path)
 {
-    Statement query(mFileDb, "SELECT path FROM files WHERE path like ?");
-    query.bind(1, string_format("%s%%", path.c_str()));
+    // A plain prefix comparison: with LIKE, "_" and "%" in a folder's name
+    // would match other folders too. As blobs, so that the length counts
+    // bytes rather than characters. The paths are collected first, as
+    // remove() deletes from the table being read.
+    Statement query(mFileDb, "SELECT path FROM files WHERE substr(CAST(path AS BLOB), 1, ?) = CAST(? AS BLOB)");
+    query.bind(1, (int) path.size());
+    query.bind(2, path);
 
-    while (query.step()) {
-        std::string filePath = query.getText(0);
+    std::vector<std::string> paths;
+    while (query.step())
+        paths.push_back(query.getText(0));
+
+    for (const auto &filePath : paths)
         remove(filePath);
-    }
 }
 
 std::string MediaStore::getETag(const string &filename)

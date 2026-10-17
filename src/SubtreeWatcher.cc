@@ -21,6 +21,7 @@
 #include "MediaFile.hh"
 #include "MetadataExtractor.hh"
 #include "SubtreeWatcher.hh"
+#include "Scanner.hh"
 #include "util.h"
 
 #include<sys/select.h>
@@ -99,7 +100,7 @@ void SubtreeWatcher::addDir(const string &root) {
     if(root[0] != '/')
         throw runtime_error("Path must be absolute.");
 
-    if (p->ignoredDirectories.find(root) != p->ignoredDirectories.end()) {
+    if (isInIgnoredDirectory(root, p->ignoredDirectories)) {
         g_warning("Ignoring directory %s", root.c_str());
         return;
     }
@@ -130,7 +131,8 @@ void SubtreeWatcher::addDir(const string &root) {
         if(fname[0] == '.') // Ignore hidden entries and also "." and "..".
             continue;
         string fullpath = root + "/" + fname;
-        lstat(fullpath.c_str(), &statbuf);
+        if (lstat(fullpath.c_str(), &statbuf) != 0)
+            continue;
         if(S_ISDIR(statbuf.st_mode)) {
             addDir(fullpath);
         }
@@ -140,10 +142,17 @@ void SubtreeWatcher::addDir(const string &root) {
 bool SubtreeWatcher::removeDir(const string &abspath) {
     if(p->str2wd.find(abspath) == p->str2wd.end())
         return false;
-    int wd = p->str2wd[abspath];
-    inotify_rm_watch(p->inotifyid, wd);
-    p->wd2str.erase(wd);
-    p->str2wd.erase(abspath);
+    // The folders below it go too: after a move their watches would go on
+    // reporting under the old path
+    for (auto it = p->str2wd.begin(); it != p->str2wd.end();) {
+        if (isAtOrBelow(it->first, abspath)) {
+            inotify_rm_watch(p->inotifyid, it->second);
+            p->wd2str.erase(it->second);
+            it = p->str2wd.erase(it);
+        } else {
+            ++it;
+        }
+    }
     printf("Stopped watching %s, %ld directories remain.\n", abspath.c_str(),
             (long)p->wd2str.size());
     if(p->wd2str.empty())
@@ -152,6 +161,8 @@ bool SubtreeWatcher::removeDir(const string &abspath) {
 }
 
 void SubtreeWatcher::fileAdded(const string &abspath) {
+    if (hasHiddenComponent(abspath))
+        return;
     printf("New file was created: %s.\n", abspath.c_str());
     try {
         DetectedFile d = p->extractor.detect(abspath);
@@ -170,13 +181,31 @@ void SubtreeWatcher::fileDeleted(const string &abspath) {
 }
 
 void SubtreeWatcher::dirAdded(const string &abspath) {
+    if (hasHiddenComponent(abspath) || isInIgnoredDirectory(abspath, p->ignoredDirectories))
+        return;
     printf("New directory was created: %s.\n", abspath.c_str());
+    // Watch first, then read what is already there: a folder moved in brings
+    // its files along, and files written before the watch existed would
+    // otherwise never be seen
     addDir(abspath);
+    Scanner s;
+    for (const auto &d : s.scanFiles(&p->extractor, abspath, AllMedia, p->ignoredDirectories)) {
+        if (d.etag == p->store.getETag(d.path))
+            continue;
+        try {
+            p->store.insert(p->extractor.extract(d));
+        } catch (const exception &e) {
+            fprintf(stderr, "Error when adding new file: %s\n", e.what());
+        }
+    }
 }
 
 void SubtreeWatcher::dirRemoved(const string &abspath) {
     printf("Subdirectory was deleted: %s.\n", abspath.c_str());
     removeDir(abspath);
+    // Deleting a folder reports its files one by one, but moving it out
+    // reports only the folder
+    p->store.removeFilesBelowPath(abspath + "/");
 }
 
 
@@ -203,17 +232,18 @@ void SubtreeWatcher::processEvents() {
             continue;
         }
         string directory = p->wd2str[event->wd];
-        string filename(event->name);
-        string abspath = directory + '/' + filename;
+        // Events about the watched folder itself carry no name
+        string abspath = event->len > 0 ? directory + '/' + string(event->name) : directory;
         bool is_dir = false;
         bool is_file = false;
         struct stat statbuf;
-        lstat(abspath.c_str(), &statbuf);
         // Remember: these are not valid in case of delete event.
-        if(S_ISDIR(statbuf.st_mode))
-            is_dir = true;
-        if(S_ISREG(statbuf.st_mode))
-            is_file = true;
+        if (event->len > 0 && lstat(abspath.c_str(), &statbuf) == 0) {
+            if(S_ISDIR(statbuf.st_mode))
+                is_dir = true;
+            if(S_ISREG(statbuf.st_mode))
+                is_file = true;
+        }
 
         if(event->mask & IN_CREATE) {
             if(is_dir) {

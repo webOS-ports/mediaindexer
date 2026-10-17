@@ -25,10 +25,33 @@
 #include <cstdio>
 #include <memory>
 #include <glib.h>
+#include <algorithm>
 
 using namespace std;
 
 namespace mediascanner {
+
+bool hasHiddenComponent(const std::string &path)
+{
+    for (size_t slash = path.find('/'); slash != string::npos; slash = path.find('/', slash + 1)) {
+        if (slash + 1 < path.size() && path[slash + 1] == '.')
+            return true;
+    }
+    return false;
+}
+
+bool isAtOrBelow(const std::string &path, const std::string &dir)
+{
+    if (path.compare(0, dir.size(), dir) != 0)
+        return false;
+    return path.size() == dir.size() || path[dir.size()] == '/' || (!dir.empty() && dir.back() == '/');
+}
+
+bool isInIgnoredDirectory(const std::string &path, const std::set<std::string> &ignoredDirectories)
+{
+    return std::any_of(ignoredDirectories.begin(), ignoredDirectories.end(),
+                       [&path](const std::string &dir) { return isAtOrBelow(path, dir); });
+}
 
 Scanner::Scanner() {
 
@@ -62,7 +85,9 @@ vector<DetectedFile> Scanner::scanFiles(MetadataExtractor *extractor, const std:
         if(fname[0] == '.') // Ignore hidden files and dirs.
             continue;
         string fullpath = root + "/" + fname;
-        lstat(fullpath.c_str(), &statbuf);
+        // Symbolic links are neither: they are not followed
+        if (lstat(fullpath.c_str(), &statbuf) != 0)
+            continue;
         if(S_ISREG(statbuf.st_mode)) {
             try {
                 DetectedFile d = extractor->detect(fullpath);
