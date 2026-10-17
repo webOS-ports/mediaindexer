@@ -61,6 +61,25 @@
                     "name": "_rev"
                 }
             ]
+        },
+        {
+            "name": "albumname_artist",
+            "props": [
+                { "collate": "primary", "name": "name" },
+                { "name": "artist" }
+            ]
+        },
+        {
+            "name": "genrePrimary",
+            "props": [
+                { "collate": "primary", "name": "genre" }
+            ]
+        },
+        {
+            "name": "artistPrimary",
+            "props": [
+                { "collate": "primary", "name": "artist" }
+            ]
         }
     ]
 }

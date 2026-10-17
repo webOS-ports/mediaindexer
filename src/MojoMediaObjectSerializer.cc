@@ -90,7 +90,8 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putInt("playbackPosition", file.playbackPosition());
         err = obj.putString("mediaType", file.mediaType().c_str());
         err = obj.putInt("modifiedTime", file.modifiedTime());
-        err = obj.putBool("appCacheCompleted", file.appCacheCompleted());
+        // appCacheComplete, as the kinds index it
+        err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("searchKey", file.title().c_str());
         err = obj.putString("title", file.title().c_str());
         // FIXME add thumbnails, just empty tag for now
@@ -105,6 +106,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("albumPath", file.albumPath().c_str());
         err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("mediaType", file.mediaType().c_str());
+        // The kind's indexes sort albums by these
+        err = obj.putInt("createdTime", file.createdTime());
+        err = obj.putInt("modifiedTime", file.modifiedTime());
         err = obj.putString("type", "local");
         // FIXME add thumbnails, just empty tag for now
         MojObject thumbArr(MojObject::Type::TypeArray);

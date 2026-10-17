@@ -138,7 +138,10 @@ bool writeFileInOwnDirectory(const char *directory, const std::string &fileName,
     bool written = false;
     int fd = openat(dirFd, tmpName.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
     if (fd >= 0) {
+        errno = 0;
         written = write(fd);
+        if (!written && errno == 0)
+            errno = EIO;
         written = close(fd) == 0 && written;
         written = written && renameat(dirFd, tmpName.c_str(), dirFd, fileName.c_str()) == 0;
         int saved = errno;

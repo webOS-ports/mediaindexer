@@ -17,7 +17,7 @@
 #ifndef MOJOMEDIADATABASE_H
 #define MOJOMEDIADATABASE_H
 
-#include <db/MojDbServiceClient.h>
+#include <db/MojDbClient.h>
 #include "db/MojDb.h"
 #include <deque>
 #include <functional>
@@ -32,7 +32,7 @@ class BaseCommand;
 class MojoMediaDatabase
 {
 public:
-    MojoMediaDatabase(MojDbServiceClient& dbclient);
+    MojoMediaDatabase(MojDbClient& dbclient);
     ~MojoMediaDatabase();
 
     // stored runs once db8 has the entry, not when the insert fails
@@ -43,7 +43,7 @@ public:
     // new indexes and readers reach the database without a rebuild
     void updateKinds();
 
-    MojDbServiceClient& databaseClient() const;
+    MojDbClient& databaseClient() const;
 
     void finish();
 
@@ -64,7 +64,7 @@ private:
     static gboolean checkQueue(gpointer user_data);
 
 private:
-    MojDbServiceClient& dbclient;
+    MojDbClient& dbclient;
     std::deque<BaseCommand*> commandQueue;
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;

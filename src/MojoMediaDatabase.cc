@@ -31,8 +31,12 @@
 #include "internal/utils.hh"
 #include "MediaFile.hh"
 
+#ifndef DB_KIND_DIRECTORY
 #define DB_KIND_DIRECTORY "/etc/palm/db/kinds/"
+#endif
+#ifndef DB_PERMISSION_DIRECTORY
 #define DB_PERMISSION_DIRECTORY "/etc/palm/db/permissions/"
+#endif
 
 namespace mediascanner
 {
@@ -113,6 +117,31 @@ protected:
     std::string _name;
 };
 
+// A find answers with at most 500 results, so totals counted from the
+// results stopped at 500. Asked for a count, db8 counts every match; one
+// result is all that comes back.
+static MojErr findCount(MojoMediaDatabase *database, MojDbClient::Signal::SlotRef slot, MojDbQuery query)
+{
+    query.limit(1);
+    return database->databaseClient().find(slot, query, false, true);
+}
+
+static MojErr mergeTotal(MojoMediaDatabase *database, MojDbClient::Signal::SlotRef slot,
+                         const MojObject &id, const MojObject &total)
+{
+    MojObject toMerge;
+    MojErr err = toMerge.put("_id", id);
+    MojErrCheck(err);
+    err = toMerge.put("total", total);
+    MojErrCheck(err);
+
+    MojObject::ObjectVec objects;
+    err = objects.push(toMerge);
+    MojErrCheck(err);
+
+    return database->databaseClient().merge(slot, objects.begin(), objects.end());
+}
+
 class GenerateAlbumThumbnailsCommand : public BaseCommand
 {
 public:
@@ -134,6 +163,42 @@ private:
 #include "MojoMediaDatabaseImage.cc"
 #include "MojoMediaDatabaseAudio.cc"
 
+// What a file's entry is selected with, so that what it belonged to can be
+// counted again once it is gone or changed
+static void selectCollections(MojDbQuery &query)
+{
+    static const char* const props[] = { "_kind", "album", "albumArtist", "genre", "artist", "albumId" };
+    for (const char *prop : props)
+        query.select(prop);
+}
+
+// Counts again the album, genre and artist, or the image album, an entry was in
+static void enqueueRecounts(MojoMediaDatabase *database, const MojObject &entry)
+{
+    MojString kind;
+    bool found = false;
+    if (entry.get("_kind", kind, found) != MojErrNone || !found)
+        return;
+
+    if (strncmp(kind.data(), "com.palm.media.audio.file:", strlen("com.palm.media.audio.file:")) == 0) {
+        MojObject album, albumArtist, genre, artist;
+        if (entry.get("album", album) && entry.get("albumArtist", albumArtist))
+            database->enqueue(new RecountAudioCollectionCommand(database, RecountAudioCollectionCommand::Album,
+                                                                album, albumArtist), false);
+        if (entry.get("genre", genre))
+            database->enqueue(new RecountAudioCollectionCommand(database, RecountAudioCollectionCommand::Genre,
+                                                                genre, MojObject()), false);
+        if (entry.get("artist", artist))
+            database->enqueue(new RecountAudioCollectionCommand(database, RecountAudioCollectionCommand::Artist,
+                                                                artist, MojObject()), false);
+    }
+    else if (strncmp(kind.data(), "com.palm.media.image.file:", strlen("com.palm.media.image.file:")) == 0) {
+        MojObject albumId;
+        if (entry.get("albumId", albumId) && albumId.type() != MojObject::TypeNull)
+            database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+    }
+}
+
 class InsertCommand : public BaseCommand
 {
 public:
@@ -151,6 +216,9 @@ public:
     {
         MojDbQuery query;
         query.select("_id");
+        selectCollections(query);
+        for (const char* field : keptFields)
+            query.select(field);
 
         // We're querying for the base type of all stored files here to avoid
         // querying each type separately
@@ -166,6 +234,14 @@ public:
     }
 
 protected:
+    // What apps keep in an entry (a bookmark, a play position, thumbnails)
+    // and when the file was first found: a file written again leaves them
+    // as they are. A field the entry does not have yet is filled in.
+    static constexpr const char* keptFields[] = {
+        "bookmark", "playbackPosition", "lastPlayTime", "thumbnails", "serviced",
+        "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime"
+    };
+
     MojDbClient::Signal::Slot<InsertCommand> find_existing_slot;
     MojDbClient::Signal::Slot<InsertCommand> insert_slot;
     MojDbClient::Signal::Slot<InsertCommand> update_slot;
@@ -182,16 +258,11 @@ protected:
         MojObject mediaObj;
         MojoMediaObjectSerializer::SerializeToDatabaseObject(file, mediaObj);
 
-        MojObject existing;
         if (results.size() > 0 && results.at(0, existing)) {
-            // A file written again: its size, times and tags change. What
-            // apps keep in the entry (a bookmark, a play position, thumbnails)
-            // and when it was first found stay as they are.
-            static const char* const keptFields[] = {
-                "bookmark", "playbackPosition", "lastPlayTime", "thumbnails", "serviced",
-                "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime"
-            };
+            // A file written again: its size, times and tags change
             for (const char* field : keptFields) {
+                if (!existing.contains(field))
+                    continue;
                 bool deleted = false;
                 err = mediaObj.del(field, deleted);
                 FailOnError(err);
@@ -242,6 +313,33 @@ protected:
         if (stored)
             stored();
 
+        enqueueFollowUps(idToUpdate);
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+    MojErr UpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+        if (stored)
+            stored();
+
+        // Its thumbnail, album, genre and artist follow what the file is now;
+        // what it was in before is counted again, as it may have left them
+        MojObject id;
+        MojErr err = existing.getRequired("_id", id);
+        FailOnError(err);
+        enqueueFollowUps(id);
+        enqueueRecounts(database, existing);
+
+        database->finish();
+        return MojErrNone;
+    }
+
+    void enqueueFollowUps(const MojObject &idToUpdate)
+    {
         if (file.type() == ImageMedia && file.albumPath().size() > 0) {
 
             database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path()), false);
@@ -259,24 +357,12 @@ protected:
                 database->enqueue(new AddArtistForAudioCommand(database, file, idToUpdate), false);
             }
         }
-
-        database->finish();
-
-        return MojErrNone;
-    }
-
-    MojErr UpdateResponse(MojObject &response, MojErr responseErr)
-    {
-        FailOnResponseError(response, responseErr);
-        if (stored)
-            stored();
-        database->finish();
-        return MojErrNone;
     }
 
 private:
     MediaFile file;
     std::function<void()> stored;
+    MojObject existing;
 };
 
 /*
@@ -302,6 +388,7 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.select("path");
+        selectCollections(query);
         query.from("com.palm.media.file:1");
         query.limit(PageSize);
         if (havePage)
@@ -343,6 +430,8 @@ protected:
             FailOnError(err);
             err = removeIds.push(idToRemove);
             FailOnError(err);
+            err = removedEntries.push(item);
+            FailOnError(err);
         }
 
         MojObject next;
@@ -365,6 +454,8 @@ protected:
     MojErr RemoveResponse(MojObject &response, MojErr responseErr)
     {
         FailOnResponseError(response, responseErr);
+        for (const MojObject &entry : removedEntries)
+            enqueueRecounts(database, entry);
         return nextPage();
     }
 
@@ -393,6 +484,7 @@ private:
     }
 
     std::function<bool(const std::string&)> stillIndexed;
+    MojObject::ObjectVec removedEntries;
     unsigned long removed;
     bool havePage = false;
     MojDbQuery::Page page;
@@ -413,6 +505,7 @@ public:
     {
         MojDbQuery query;
         query.select("_id");
+        selectCollections(query);
 
         // We're querying for the base type of all stored files here to avoid
         // querying each type separately
@@ -457,6 +550,9 @@ protected:
 
             err = removeIds.push(idToRemove);
             FailOnError(err);
+
+            err = removedEntries.push(item);
+            FailOnError(err);
         }
 
         err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
@@ -468,6 +564,10 @@ protected:
     MojErr RemoveResponse(MojObject &response, MojErr err)
     {
         FailOnResponseError(response, err);
+
+        // Totals of the albums, genres and artists it was in
+        for (const MojObject &entry : removedEntries)
+            enqueueRecounts(database, entry);
 
         database->finish();
 
@@ -476,6 +576,7 @@ protected:
 
 private:
     std::string filename;
+    MojObject::ObjectVec removedEntries;
 };
 
 class RemoveAllCommand : public BaseCommand
@@ -483,68 +584,32 @@ class RemoveAllCommand : public BaseCommand
 public:
     RemoveAllCommand(MojoMediaDatabase *database) :
         BaseCommand("RemoveAll", database),
-        query_removal_slot(this, &RemoveAllCommand::QueryForRemovalResponse),
         remove_slot(this, &RemoveAllCommand::RemoveResponse)
     {
     }
 
     void execute()
     {
+        // By query: db8 deletes every match, where a find answers with at
+        // most 500 of them
         MojDbQuery query;
-        query.select("_id");
 
-        // We're querying for the base type of all stored files here to avoid
-        // querying each type separately
+        // The base type of all stored files, to avoid going through each
+        // type separately
         query.from("com.palm.media.types:1");
 
-        MojErr err = database->databaseClient().find(query_removal_slot, query);
+        MojErr err = database->databaseClient().del(remove_slot, query, MojDbFlagPurge);
         ErrorToException(err);
     }
 
 protected:
-    MojDbClient::Signal::Slot<RemoveAllCommand> query_removal_slot;
     MojDbClient::Signal::Slot<RemoveAllCommand> remove_slot;
 
-    MojErr QueryForRemovalResponse(MojObject &response, MojErr responseErr)
+    MojErr RemoveResponse(MojObject &, MojErr responseErr)
     {
-        if (responseErr != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        FailOnError(err);
-
-        if (results.size() == 0) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        MojObject::ObjectVec removeIds;
-
-        for (int n = 0; n < results.size(); n++) {
-            MojObject item;
-            if(!results.at(n, item))
-                continue;
-
-            MojObject idToRemove;
-            err = item.getRequired("_id", idToRemove);
-            FailOnError(err);
-
-            err = removeIds.push(idToRemove);
-            FailOnError(err);
-        }
-
-        err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
-        FailOnError(err);
-
-        return MojErrNone;
-    }
-
-    MojErr RemoveResponse(MojObject &response, MojErr err)
-    {
-        FailOnResponseError(response, err);
+        // Not an error on a first start, when the kinds are not there yet
+        if (responseErr != MojErrNone)
+            g_message("RemoveAll: nothing removed (err %d)", (int) responseErr);
 
         database->finish();
 
@@ -624,13 +689,18 @@ protected:
             return MojErrNone;
         }
 
-        MojObject perms;
-        perms.put("permissions", permissions);
+        // The file holds an array of them
+        if (permissions.type() != MojObject::TypeArray) {
+            database->fail(permissionsPath + " holds no array of permissions");
+            return MojErrNone;
+        }
+        MojObject::ObjectVec permissionsVec;
+        for (MojObject::ConstArrayIterator it = permissions.arrayBegin(); it != permissions.arrayEnd(); ++it) {
+            MojErr err = permissionsVec.push(*it);
+            FailOnError(err);
+        }
 
-        MojRefCountedPtr<MojServiceRequest> request;
-        database->databaseClient().service()->createRequest(request);
-
-        MojErr err = request->send(put_permissions_slot, "com.palm.db", "putPermissions", perms);
+        MojErr err = database->databaseClient().putPermissions(put_permissions_slot, permissionsVec.begin(), permissionsVec.end());
         FailOnError(err);
 
         return MojErrNone;
@@ -681,7 +751,7 @@ private:
     std::string kindName;
 };
 
-MojoMediaDatabase::MojoMediaDatabase(MojDbServiceClient& dbclient) :
+MojoMediaDatabase::MojoMediaDatabase(MojDbClient& dbclient) :
     dbclient(dbclient),
     currentCommand(0),
     previousCommand(0),
@@ -698,7 +768,7 @@ MojoMediaDatabase::~MojoMediaDatabase()
         delete currentCommand;
 }
 
-MojDbServiceClient& MojoMediaDatabase::databaseClient() const
+MojDbClient& MojoMediaDatabase::databaseClient() const
 {
     return dbclient;
 }

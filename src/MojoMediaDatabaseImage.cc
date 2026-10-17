@@ -16,7 +16,7 @@ public:
         query.from("com.palm.media.image.file:1");
         query.where("albumId", MojDbQuery::OpEq, albumId);
 
-        MojErr err = database->databaseClient().find(query_images_slot, query);
+        MojErr err = findCount(database, query_images_slot, query);
         ErrorToException(err);
     }
 
@@ -28,28 +28,15 @@ protected:
     {
         FailOnResponseError(response, responseErr);
 
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        MojObject toMerge;
-        toMerge.put("_id", albumId);
+        MojInt64 images = 0;
+        MojErr err = response.getRequired("count", images);
+        FailOnError(err);
 
         MojObject totalObj;
-        totalObj.putInt("images", results.size());
-        toMerge.put("total", totalObj);
+        totalObj.putInt("images", images);
 
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        err = database->databaseClient().merge(album_update_slot, objects.begin(), objects.end());
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
+        err = mergeTotal(database, album_update_slot, albumId, totalObj);
+        FailOnError(err);
 
         return MojErrNone;
     }
