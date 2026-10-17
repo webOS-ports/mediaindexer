@@ -46,5 +46,13 @@
             "extend": "allow",
             "delete": "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.audio.file:1",
+        "caller"    : "org.webosports.app.soundrecorder",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]

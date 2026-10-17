@@ -16,7 +16,7 @@ public:
         query.from("com.palm.media.image.file:1");
         query.where("albumId", MojDbQuery::OpEq, albumId);
 
-        MojErr err = database->databaseClient().find(query_images_slot, query);
+        MojErr err = findCount(database, query_images_slot, query);
         ErrorToException(err);
     }
 
@@ -26,37 +26,30 @@ protected:
 
     MojErr QueryImagesResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
+        MojInt64 images = 0;
+        MojErr err = response.getRequired("count", images);
+        FailOnError(err);
+
+        if (images == 0) {
+            err = deleteEntry(database, album_update_slot, albumId);
+            FailOnError(err);
             return MojErrNone;
         }
-
-        MojObject toMerge;
-        toMerge.put("_id", albumId);
 
         MojObject totalObj;
-        totalObj.putInt("images", results.size());
-        toMerge.put("total", totalObj);
+        totalObj.putInt("images", images);
 
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        err = database->databaseClient().merge(album_update_slot, objects.begin(), objects.end());
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
+        err = mergeTotal(database, album_update_slot, albumId, totalObj);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr AlbumUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -64,47 +57,6 @@ protected:
     }
 
 private:
-    MojObject albumId;
-};
-
-class AssignImageToAlbumCommand : public BaseCommand
-{
-public:
-    AssignImageToAlbumCommand(MojoMediaDatabase *database, const MojObject& imageId, const MojObject& albumId) :
-        BaseCommand("AssignImageToAlbumCommand", database),
-        image_update_slot(this, &AssignImageToAlbumCommand::ImageUpdateResponse),
-        imageId(imageId),
-        albumId(albumId)
-    {
-    }
-
-    void execute()
-    {
-        MojObject toMerge;
-        toMerge.put("_id", imageId);
-        toMerge.put("albumId", albumId);
-
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        MojErr err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
-        ErrorToException(err);
-    }
-
-protected:
-    MojDbClient::Signal::Slot<AssignImageToAlbumCommand> image_update_slot;
-
-    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
-    {
-        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
-
-        database->finish();
-
-        return MojErrNone;
-    }
-
-private:
-    MojObject imageId;
     MojObject albumId;
 };
 
@@ -115,6 +67,7 @@ public:
         BaseCommand("AddAlbumForImageCommand", database),
         query_album_slot(this, &AddAlbumForImageCommand::QueryForAlbumResponse),
         insert_album_slot(this, &AddAlbumForImageCommand::InsertAlbumResponse),
+        image_update_slot(this, &AddAlbumForImageCommand::ImageUpdateResponse),
         file(file),
         idToUpdate(idToUpdate)
     {
@@ -138,14 +91,15 @@ public:
 protected:
     MojDbClient::Signal::Slot<AddAlbumForImageCommand> query_album_slot;
     MojDbClient::Signal::Slot<AddAlbumForImageCommand> insert_album_slot;
+    MojDbClient::Signal::Slot<AddAlbumForImageCommand> image_update_slot;
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have an album with the same path we can use it
         if (results.size() > 0)
@@ -169,7 +123,7 @@ protected:
         albumObj.putBool("toBeDeleted", false);
 
         MojObject totalObj;
-        // image count update will be triggered by the AssignImageToAlbumCommand later
+        // the image count is updated once the image is assigned to it
         totalObj.putInt("images", 0);
         albumObj.put("total", totalObj);
 
@@ -181,14 +135,14 @@ protected:
         objectsToInsert.push(albumObj);
 
         err = database->databaseClient().put(insert_album_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateImage(response);
     }
@@ -197,7 +151,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -210,10 +164,41 @@ protected:
         err = item.getRequired("id", albumId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", albumId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
-        database->enqueue(new AssignImageToAlbumCommand(database, idToUpdate, albumId), false);
+        // The image is assigned in this same command: as a command of its
+        // own it came after whatever was queued meanwhile, such as the
+        // recount after the removal of the album's last other image, which
+        // found the album empty and deleted it
+        this->albumId = albumId;
+        MojObject toMerge;
+        toMerge.put("_id", idToUpdate);
+        toMerge.put("albumId", albumId);
+
+        MojObject::ObjectVec objects;
+        objects.push(toMerge);
+
+        err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
+        FailOnError(err);
+
+        return MojErrNone;
+    }
+
+    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        IgnoreIfAbandoned();
+
+        // The image's entry went meanwhile (the file was removed): nothing to
+        // assign, but the album may be empty now
+        if (responseErr == MojErrDbKindNotSpecified) {
+            database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+            database->finish();
+            return MojErrNone;
+        }
+        FailOnResponseError(response, responseErr);
+
+        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
         database->enqueue(new GenerateAlbumThumbnailsCommand(database, albumId), false);
 
         database->finish();
@@ -224,50 +209,76 @@ protected:
 private:
     MediaFile file;
     MojObject idToUpdate;
+    MojObject albumId;
 };
 
 class GenerateImageThumbnailCommand : public BaseCommand
 {
 public:
-    GenerateImageThumbnailCommand(MojoMediaDatabase *database, const MojObject& imageId, const std::string& imagePath, const std::string& extension) :
+    GenerateImageThumbnailCommand(MojoMediaDatabase *database, const MojObject& imageId, const std::string& imagePath) :
         BaseCommand("GenerateImageThumbnailCommand", database),
         update_image_slot(this, &GenerateImageThumbnailCommand::UpdateImageResponse),
         imageId(imageId),
-        imagePath(imagePath),
-        extension(extension)
+        imagePath(imagePath)
     {
     }
 
     void execute()
     {
-        // path for thumbnails /media/internal/.thumbnails/<some path>
+        // Runs long after the file was found: opened without following
+        // links, and read only if it is still a regular file
+        QImage origImage;
+        int imageFd = open(imagePath.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+        struct stat st;
+        if (imageFd >= 0 && fstat(imageFd, &st) == 0 && S_ISREG(st.st_mode)) {
+            QFile imageFile;
+            if (imageFile.open(imageFd, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
+                origImage.load(&imageFile, nullptr);
+                imageFile.close();
+                imageFd = -1;
+            }
+        }
+        if (imageFd >= 0)
+            close(imageFd);
+        if (origImage.isNull()) {
+            database->fail("could not read " + imagePath);
+            return;
+        }
 
-        GChecksum *checksum;
-        checksum = g_checksum_new(G_CHECKSUM_MD5);
-        g_checksum_update(checksum, (const guchar *) imagePath.c_str(), imagePath.length());
+        // Only ever smaller
+        int width = Settings::LunaSettings()->gridUnit * 8;
+        QImage thumbnailImage = origImage.width() > width ?
+            origImage.scaledToWidth(width, Qt::SmoothTransformation) : origImage;
 
-        guint8 digest[16];
-        gsize digest_len = sizeof (digest);
-        g_checksum_get_digest(checksum, digest, &digest_len);
+        // Named after the image's path, in /media/internal/.thumbnails; PNG
+        // where the image has transparency, JPEG otherwise
+        const char *format = thumbnailImage.hasAlphaChannel() ? "png" : "jpg";
+        gchar *digest = g_compute_checksum_for_string(G_CHECKSUM_MD5, imagePath.c_str(), imagePath.length());
+        fileName = std::string(digest) + "." + format;
+        g_free(digest);
+        std::string thumbnailPath = std::string(THUMBNAIL_DIR) + "/" + fileName;
 
-        char *file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
-        char *thumbnailPath = g_build_filename(THUMBNAIL_DIR, file, NULL);
-        g_checksum_free(checksum);
-
-        if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
-            g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
-
-        int gridUnit = Settings::LunaSettings()->gridUnit;
-        QImage origImage(QString::fromStdString(imagePath));
-        QImage thumbnailImage = origImage.scaledToWidth((gridUnit * 8), Qt::SmoothTransformation);
-        thumbnailImage.save(QString(thumbnailPath));
+        // Thumbnails are written as root below /media/internal, where users
+        // can write: see writeFileInOwnDirectory()
+        bool written = writeFileInOwnDirectory(THUMBNAIL_DIR, fileName, [&thumbnailImage, format](int fd) {
+            QFile file;
+            if (!file.open(fd, QIODevice::WriteOnly, QFileDevice::DontCloseHandle))
+                return false;
+            bool saved = thumbnailImage.save(&file, format);
+            file.close();
+            return saved;
+        });
+        if (!written) {
+            database->fail("could not write " + thumbnailPath + ": " + strerror(errno));
+            return;
+        }
 
         MojObject toMerge;
         toMerge.put("_id", imageId);
 
 
         MojObject appGridThumbnail;
-        appGridThumbnail.putString("path", thumbnailPath);
+        appGridThumbnail.putString("path", thumbnailPath.c_str());
         appGridThumbnail.putBool("cached", true);
 
         MojObject dimensions;
@@ -287,9 +298,6 @@ public:
 
         MojErr err = database->databaseClient().merge(update_image_slot, objects.begin(), objects.end());
         ErrorToException(err);
-
-        g_free(file);
-        g_free(thumbnailPath);
     }
 
 protected:
@@ -297,7 +305,21 @@ protected:
 
     MojErr UpdateImageResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        IgnoreIfAbandoned();
+
+        // The image's entry went (the file was removed) while this waited in
+        // the queue: so does its thumbnail
+        if (responseErr == MojErrDbKindNotSpecified) {
+            int dirFd = openOwnDirectory(THUMBNAIL_DIR);
+            if (dirFd >= 0) {
+                unlinkat(dirFd, fileName.c_str(), 0);
+                close(dirFd);
+            }
+            database->finish();
+            return MojErrNone;
+        }
+
+        FailOnResponseError(response, responseErr);
         database->finish();
         return MojErrNone;
     }
@@ -305,5 +327,5 @@ protected:
 private:
     MojObject imageId;
     std::string imagePath;
-    std::string extension;
+    std::string fileName;
 };

@@ -17,9 +17,11 @@
 #ifndef MOJOMEDIADATABASE_H
 #define MOJOMEDIADATABASE_H
 
-#include <db/MojDbServiceClient.h>
+#include <db/MojDbClient.h>
 #include "db/MojDb.h"
 #include <deque>
+#include <functional>
+#include <string>
 
 namespace mediascanner
 {
@@ -30,18 +32,35 @@ class BaseCommand;
 class MojoMediaDatabase
 {
 public:
-    MojoMediaDatabase(MojDbServiceClient& dbclient);
+    MojoMediaDatabase(MojDbClient& dbclient);
     ~MojoMediaDatabase();
 
-    void insert(const mediascanner::MediaFile& file);
+    // stored runs once db8 has the entry, not when the insert fails
+    void insert(const mediascanner::MediaFile& file, std::function<void()> stored = nullptr);
     void remove(const std::string& filename);
     void prepareForRebuild(bool withSchemaRebuild);
+    // Puts the kinds and their permissions as /etc/palm/db has them, so that
+    // new indexes and readers reach the database without a rebuild
+    void updateKinds();
 
-    MojDbServiceClient& databaseClient() const;
+    MojDbClient& databaseClient() const;
 
     void finish();
 
     void enqueue(BaseCommand *command, bool restart = true);
+    // Next in line, ahead of what is queued: for a command that goes on in steps
+    void enqueueFront(BaseCommand *command);
+    // Logs why the current command failed, and finishes it
+    void fail(const std::string &message);
+    // Removes the entries of files for which stillIndexed(path) is false
+    void reconcile(std::function<bool(const std::string&)> stillIndexed);
+    // Counts every album, genre and artist again: the empty ones go
+    void recountCollections();
+
+    // The command waiting for db8, if any
+    std::string currentCommandName() const;
+
+    static const int CommandTimeoutSeconds;
 
 private:
     void checkRestarting();
@@ -50,13 +69,15 @@ private:
 
     static gboolean restartQueue(gpointer user_data);
     static gboolean checkQueue(gpointer user_data);
+    static gboolean commandTimedOut(gpointer user_data);
 
 private:
-    MojDbServiceClient& dbclient;
+    MojDbClient& dbclient;
     std::deque<BaseCommand*> commandQueue;
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;
     int restart_timeout;
+    guint command_timeout;
 
     friend class BaseCommand;
 };

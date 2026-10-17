@@ -156,6 +156,18 @@
                     "name": "_rev"
                 }
             ]
+        },
+        {
+            "name": "modifiedTime",
+            "props": [
+                { "name": "modifiedTime" }
+            ]
+        },
+        {
+            "name": "mimeType",
+            "props": [
+                { "name": "mimeType" }
+            ]
         }
     ]
 }

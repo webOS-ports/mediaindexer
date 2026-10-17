@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <set>
 
 #include <glib.h>
 
@@ -40,7 +41,17 @@ namespace  mediascanner {
 
 // Increment this whenever changing db schema.
 // It will cause dbstore to rebuild its tables.
-static const int schemaVersion = 5;
+static const int schemaVersion = 8;
+
+// Versions whose db8 entries only lack fields added since: for those the file
+// list alone is rebuilt, every file is read again and its entry updated, and
+// what apps stored in the entries is kept. (6 added mimeType; 7 added
+// createdTime and modifiedTime to images and appCacheComplete to videos;
+// 8 took images' createdTime from their EXIF.)
+static bool entriesStillUsable(int version)
+{
+    return version >= 5 && version <= 7;
+}
 
 static int getSchemaVersion(sqlite3 *db)
 {
@@ -59,7 +70,9 @@ static void execute_sql(sqlite3 *db, const string &cmd)
 {
     char *errmsg = nullptr;
     if(sqlite3_exec(db, cmd.c_str(), nullptr, nullptr, &errmsg) != SQLITE_OK) {
-        throw runtime_error(errmsg);
+        string msg(errmsg ? errmsg : sqlite3_errmsg(db));
+        sqlite3_free(errmsg);
+        throw runtime_error(msg);
     }
 }
 
@@ -87,7 +100,21 @@ CREATE TABLE files (
     version.step();
 }
 
-#define LUNA_DATA_DIR   "/var/luna/data"
+// The indexer's own folder: it runs as "media", which may write only there
+// (and to the thumbnails), see files/systemd/mediaindexer.service
+#define LUNA_DATA_DIR   "/var/luna/data/mediaindexer"
+
+static sqlite3 *openFileList(const char *path)
+{
+    sqlite3 *db = nullptr;
+    int err = sqlite3_open(path, &db);
+    if (err != SQLITE_OK) {
+        string msg(db ? sqlite3_errmsg(db) : sqlite3_errstr(err));
+        sqlite3_close(db);
+        throw runtime_error(msg);
+    }
+    return db;
+}
 
 MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
     mFileDb(0),
@@ -96,16 +123,24 @@ MediaStore::MediaStore(MojoMediaDatabase *mojoDb) :
     if (!g_file_test(LUNA_DATA_DIR, G_FILE_TEST_EXISTS))
         g_mkdir_with_parents(LUNA_DATA_DIR, 0755);
 
-    int err = sqlite3_open(LUNA_DATA_DIR "/filenotify.db3", &mFileDb);
-    if (err) {
-        g_critical("Could not open database: %s", sqlite3_errmsg(mFileDb));
-        return;
-    }
+    try {
+        mFileDb = openFileList(LUNA_DATA_DIR "/filenotify.db3");
 
-    if (getSchemaVersion(mFileDb) != schemaVersion) {
-        deleteTables(mFileDb);
+        int version = getSchemaVersion(mFileDb);
+        if (version != schemaVersion) {
+            deleteTables(mFileDb);
+            createTables(mFileDb);
+            if (!entriesStillUsable(version))
+                mMojoDb->prepareForRebuild(true);
+        }
+    } catch (const exception &e) {
+        // Kept in memory instead: every start then reads every file again
+        // and updates its entry, but the index works. Throwing here would
+        // end the service, and systemd would restart it into the same error.
+        g_critical("Could not open the file list in %s, keeping it in memory: %s", LUNA_DATA_DIR, e.what());
+        sqlite3_close(mFileDb);
+        mFileDb = openFileList(":memory:");
         createTables(mFileDb);
-        mMojoDb->prepareForRebuild(true);
     }
 }
 
@@ -119,17 +154,40 @@ MediaStore::~MediaStore()
 
 void MediaStore::insert(const MediaFile &m)
 {
-    Statement query(mFileDb, "INSERT OR REPLACE INTO files (path, etag) VALUES (?, ?)");
-    string fileName = m.path();
-    query.bind(1, fileName);
-    query.bind(2, m.etag());
-    query.step();
+    // The file counts as indexed once db8 has its entry. Recorded before,
+    // an insert that failed, or did not run because the indexer stopped
+    // with it still queued, left the file out of db8 until it changed.
+    // Until then it is pending: a folder removed meanwhile takes it along,
+    // and a removal of the file keeps it from being recorded.
+    const string path = m.path();
+    const string etag = m.etag();
+    const unsigned long insertNumber = ++mNextInsert;
+    mPendingInserts[path] = insertNumber;
+    mMojoDb->insert(m, [this, path, etag, insertNumber]() {
+        auto pending = mPendingInserts.find(path);
+        if (pending == mPendingInserts.end() || pending->second != insertNumber)
+            return;
+        mPendingInserts.erase(pending);
+        try {
+            setETag(path, etag);
+        } catch (const exception &e) {
+            g_warning("Could not record %s as indexed: %s", path.c_str(), e.what());
+        }
+    });
+}
 
-    mMojoDb->insert(m);
+void MediaStore::setETag(const string &path, const string &etag)
+{
+    Statement query(mFileDb, "INSERT OR REPLACE INTO files (path, etag) VALUES (?, ?)");
+    query.bind(1, path);
+    query.bind(2, etag);
+    query.step();
 }
 
 void MediaStore::remove(const string &filename)
 {
+    mPendingInserts.erase(filename);
+
     Statement del(mFileDb, "DELETE FROM files WHERE path = ?");
     del.bind(1, filename);
     del.step();
@@ -137,15 +195,39 @@ void MediaStore::remove(const string &filename)
     mMojoDb->remove(filename);
 }
 
+std::vector<std::string> MediaStore::filesBelowPath(const string &path)
+{
+    // A plain prefix comparison: with LIKE, "_" and "%" in a folder's name
+    // would match other folders too, and case would not count. The prefix
+    // ends in "/", or /m/Music would take /m/Music2 along. As blobs, so
+    // that the length counts bytes rather than characters.
+    string prefix = path;
+    if (prefix.empty() || prefix.back() != '/')
+        prefix += '/';
+    Statement query(mFileDb, "SELECT path FROM files WHERE substr(CAST(path AS BLOB), 1, ?) = CAST(? AS BLOB)");
+    query.bind(1, (int) prefix.size());
+    query.bind(2, prefix);
+
+    std::vector<std::string> paths;
+    while (query.step())
+        paths.push_back(query.getText(0));
+
+    // And the files on their way to db8: their entries are made after this,
+    // under a path that may be gone by then
+    const std::set<std::string> recorded(paths.begin(), paths.end());
+    for (auto it = mPendingInserts.lower_bound(prefix);
+         it != mPendingInserts.end() && it->first.compare(0, prefix.size(), prefix) == 0; ++it) {
+        if (recorded.find(it->first) == recorded.end())
+            paths.push_back(it->first);
+    }
+    return paths;
+}
+
 void MediaStore::removeFilesBelowPath(const string &path)
 {
-    Statement query(mFileDb, "SELECT path FROM files WHERE path like ?");
-    query.bind(1, string_format("%s%%", path.c_str()));
-
-    while (query.step()) {
-        std::string filePath = query.getText(0);
+    // Collected first, as remove() deletes from the table being read
+    for (const auto &filePath : filesBelowPath(path))
         remove(filePath);
-    }
 }
 
 std::string MediaStore::getETag(const string &filename)

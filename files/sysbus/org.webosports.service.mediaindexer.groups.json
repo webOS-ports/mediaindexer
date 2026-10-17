@@ -1,0 +1,4 @@
+{
+    "allowedNames": ["org.webosports.service.mediaindexer"],
+    "mediaindexer.permissions": ["oem"]
+}

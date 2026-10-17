@@ -289,6 +289,27 @@
                     "name": "_rev"
                 }
             ]
+        },
+        {
+            "name": "modifiedTime",
+            "props": [
+                { "name": "modifiedTime" }
+            ]
+        },
+        {
+            "name": "isRingtone_albumPrimary_albumArtist",
+            "props": [
+                { "name": "isRingtone" },
+                { "collate": "primary", "name": "album" },
+                { "name": "albumArtist" }
+            ]
+        },
+        {
+            "name": "isRingtone_genrePrimary",
+            "props": [
+                { "name": "isRingtone" },
+                { "collate": "primary", "name": "genre" }
+            ]
         }
     ]
 }

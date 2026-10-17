@@ -20,6 +20,7 @@
 #ifndef MEDIASTORE_H_
 #define MEDIASTORE_H_
 
+#include <map>
 #include <vector>
 #include <string>
 #include <sqlite3.h>
@@ -43,11 +44,19 @@ public:
     void insert(const MediaFile &m);
     void remove(const std::string &fileName);
     void removeFilesBelowPath(const std::string& path);
+    // The files below the folder recorded as indexed, or on their way to db8
+    std::vector<std::string> filesBelowPath(const std::string& path);
     std::string getETag(const std::string &filename);
 
 private:
+    void setETag(const std::string &path, const std::string &etag);
+
     sqlite3 *mFileDb;
     MojoMediaDatabase *mMojoDb;
+    // Inserts sent to db8 and not confirmed yet, by path, with a number
+    // telling them apart: a removal or a newer insert of the path supersedes one
+    std::map<std::string, unsigned long> mPendingInserts;
+    unsigned long mNextInsert = 0;
 };
 
 } // namespace mediascanner

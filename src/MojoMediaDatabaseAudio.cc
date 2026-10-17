@@ -1,12 +1,14 @@
 class CountAlbumAudiosCommand : public BaseCommand
 {
 public:
-    CountAlbumAudiosCommand(MojoMediaDatabase *database, const MojObject& albumIdToMerge, const MojObject& albumName) :
+    CountAlbumAudiosCommand(MojoMediaDatabase *database, const MojObject& albumIdToMerge, const MojObject& albumName,
+                            const MojObject& albumArtist) :
         BaseCommand("CountAlbumAudiosCommand", database),
         query_audios_slot(this, &CountAlbumAudiosCommand::QueryAudiosResponse),
         album_update_slot(this, &CountAlbumAudiosCommand::AlbumUpdateResponse),
         albumIdToMerge(albumIdToMerge),
-        albumName(albumName)
+        albumName(albumName),
+        albumArtist(albumArtist)
     {
     }
 
@@ -17,8 +19,9 @@ public:
         query.from("com.palm.media.audio.file:1");
         query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
         query.where("album", MojDbQuery::OpEq, albumName, MojDbCollationPrimary);
+        query.where("albumArtist", MojDbQuery::OpEq, albumArtist);
 
-        MojErr err = database->databaseClient().find(query_audios_slot, query);
+        MojErr err = findCount(database, query_audios_slot, query);
         ErrorToException(err);
     }
 
@@ -28,37 +31,30 @@ protected:
 
     MojErr QueryAudiosResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
+        MojInt64 tracks = 0;
+        MojErr err = response.getRequired("count", tracks);
+        FailOnError(err);
+
+        if (tracks == 0) {
+            err = deleteEntry(database, album_update_slot, albumIdToMerge);
+            FailOnError(err);
             return MojErrNone;
         }
-
-        MojObject toMerge;
-        toMerge.put("_id", albumIdToMerge);
 
         MojObject totalObj;
-        totalObj.putInt("tracks", results.size());
-        toMerge.put("total", totalObj);
+        totalObj.putInt("tracks", tracks);
 
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        err = database->databaseClient().merge(album_update_slot, objects.begin(), objects.end());
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
+        err = mergeTotal(database, album_update_slot, albumIdToMerge, totalObj);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr AlbumUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -68,6 +64,7 @@ protected:
 private:
     MojObject albumIdToMerge;
     MojObject albumName;
+    MojObject albumArtist;
 };
 
 class AddAlbumForAudioCommand : public BaseCommand
@@ -88,10 +85,17 @@ public:
         query.select("_id");
         query.from("com.palm.media.audio.album:1");
 
+        // An album is its name and its album artist: "Greatest Hits" by two
+        // artists is two albums
         MojString albumStr;
         albumStr.assign(file.album().c_str());
         albumName = MojObject(albumStr);
         query.where("name", MojDbQuery::OpEq, albumName, MojDbCollationPrimary);
+
+        MojString albumArtistStr;
+        albumArtistStr.assign(file.albumArtist().c_str());
+        albumArtist = MojObject(albumArtistStr);
+        query.where("artist", MojDbQuery::OpEq, albumArtist);
 
         MojErr err = database->databaseClient().find(query_album_slot, query);
         ErrorToException(err);
@@ -103,13 +107,13 @@ protected:
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
-        // if we already have an album with the same path we can use it
+        // if we already have this album we can use it
         if (results.size() > 0)
             return updateAudio(response);
 
@@ -135,14 +139,14 @@ protected:
         objectsToInsert.push(albumObj);
 
         err = database->databaseClient().put(insert_album_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -151,7 +155,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -164,10 +168,10 @@ protected:
         err = item.getRequired("id", albumId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", albumId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
-        database->enqueue(new CountAlbumAudiosCommand(database, albumId, albumName), false);
+        database->enqueue(new CountAlbumAudiosCommand(database, albumId, albumName, albumArtist), false);
 
         // FIXME: generate thumbnails
         database->enqueue(new GenerateAlbumThumbnailsCommand(database, albumId), false);
@@ -181,20 +185,28 @@ private:
     MediaFile file;
     MojObject idToUpdate;
     MojObject albumName;
+    MojObject albumArtist;
 };
 
-class CountGenreAudiosCommand : public BaseCommand
+/*
+ * Counts the tracks and the albums of a genre or an artist and stores them in
+ * its entry. One request at a time: with both sent at once, two failing
+ * replies finished the command twice, the second time ending whichever
+ * command ran next.
+ */
+class CountCollectionAudiosCommand : public BaseCommand
 {
 public:
-    CountGenreAudiosCommand(MojoMediaDatabase *database, const MojObject& genreIdToMerge, const MojObject& genreName) :
-        BaseCommand("CountGenreAudiosCommand", database),
-        query_audios_file_slot(this, &CountGenreAudiosCommand::QueryAudiosFileResponse),
-        query_audios_album_slot(this, &CountGenreAudiosCommand::QueryAudiosAlbumResponse),
-        genre_update_slot(this, &CountGenreAudiosCommand::GenreUpdateResponse),
-        genreIdToMerge(genreIdToMerge),
-        genreName(genreName),
-        total_tracks(-1),
-        total_albums(-1)
+    CountCollectionAudiosCommand(MojoMediaDatabase *database, const char *name, const char *property,
+                                 const MojObject& idToMerge, const MojObject& value) :
+        BaseCommand(name, database),
+        query_audios_file_slot(this, &CountCollectionAudiosCommand::QueryAudiosFileResponse),
+        query_audios_album_slot(this, &CountCollectionAudiosCommand::QueryAudiosAlbumResponse),
+        update_slot(this, &CountCollectionAudiosCommand::UpdateResponse),
+        property(property),
+        idToMerge(idToMerge),
+        value(value),
+        total_tracks(0)
     {
     }
 
@@ -204,83 +216,63 @@ public:
         query.select("_id");
         query.from("com.palm.media.audio.file:1");
         query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
-        query.where("genre", MojDbQuery::OpEq, genreName);
+        // As the entry was found by: "rock" and "Rock" are one genre
+        query.where(property, MojDbQuery::OpEq, value, MojDbCollationPrimary);
 
-        MojErr err = database->databaseClient().find(query_audios_file_slot, query);
-        ErrorToException(err);
-
-        MojDbQuery query_album;
-        query_album.select("_id");
-        query_album.from("com.palm.media.audio.album:1");
-        query_album.where("genre", MojDbQuery::OpEq, genreName);
-
-        err = database->databaseClient().find(query_audios_album_slot, query_album);
+        MojErr err = findCount(database, query_audios_file_slot, query);
         ErrorToException(err);
     }
 
 protected:
-    MojDbClient::Signal::Slot<CountGenreAudiosCommand> query_audios_file_slot;
-    MojDbClient::Signal::Slot<CountGenreAudiosCommand> query_audios_album_slot;
-    MojDbClient::Signal::Slot<CountGenreAudiosCommand> genre_update_slot;
+    MojDbClient::Signal::Slot<CountCollectionAudiosCommand> query_audios_file_slot;
+    MojDbClient::Signal::Slot<CountCollectionAudiosCommand> query_audios_album_slot;
+    MojDbClient::Signal::Slot<CountCollectionAudiosCommand> update_slot;
 
     MojErr QueryAudiosFileResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
+        MojErr err = response.getRequired("count", total_tracks);
+        FailOnError(err);
+
+        if (total_tracks == 0) {
+            err = deleteEntry(database, update_slot, idToMerge);
+            FailOnError(err);
             return MojErrNone;
         }
 
-        total_tracks = results.size();
-        return updateAudio();
-    }
+        MojDbQuery query_album;
+        query_album.select("_id");
+        query_album.from("com.palm.media.audio.album:1");
+        query_album.where(property, MojDbQuery::OpEq, value, MojDbCollationPrimary);
 
-    MojErr QueryAudiosAlbumResponse(MojObject &response, MojErr responseErr)
-    {
-        ResponseToException(response, responseErr);
-
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        total_albums = results.size();
-        return updateAudio();
-    }
-
-    MojErr updateAudio()
-    {
-        if ((total_tracks == -1) || (total_albums == -1))
-            return MojErrNone;
-
-        MojObject toMerge;
-        toMerge.put("_id", genreIdToMerge);
-
-        MojObject totalObj;
-        totalObj.putInt("tracks", total_tracks);
-        totalObj.putInt("albums", total_albums);
-        toMerge.put("total", totalObj);
-
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        MojErr err = database->databaseClient().merge(genre_update_slot, objects.begin(), objects.end());
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
+        err = findCount(database, query_audios_album_slot, query_album);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
-    MojErr GenreUpdateResponse(MojObject &response, MojErr responseErr)
+    MojErr QueryAudiosAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
+
+        MojInt64 total_albums = 0;
+        MojErr err = response.getRequired("count", total_albums);
+        FailOnError(err);
+
+        MojObject totalObj;
+        totalObj.putInt("tracks", total_tracks);
+        totalObj.putInt("albums", total_albums);
+
+        err = mergeTotal(database, update_slot, idToMerge, totalObj);
+        FailOnError(err);
+
+        return MojErrNone;
+    }
+
+    MojErr UpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -288,10 +280,19 @@ protected:
     }
 
 private:
-    MojObject genreIdToMerge;
-    MojObject genreName;
-    int total_tracks;
-    int total_albums;
+    const char *property;
+    MojObject idToMerge;
+    MojObject value;
+    MojInt64 total_tracks;
+};
+
+class CountGenreAudiosCommand : public CountCollectionAudiosCommand
+{
+public:
+    CountGenreAudiosCommand(MojoMediaDatabase *database, const MojObject& genreIdToMerge, const MojObject& genreName) :
+        CountCollectionAudiosCommand(database, "CountGenreAudiosCommand", "genre", genreIdToMerge, genreName)
+    {
+    }
 };
 
 class AddGenreForAudioCommand : public BaseCommand
@@ -327,11 +328,11 @@ protected:
 
     MojErr QueryForGenreResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have a genre with the same path we can use it
         if (results.size() > 0)
@@ -358,14 +359,14 @@ protected:
         objectsToInsert.push(genreObj);
 
         err = database->databaseClient().put(insert_genre_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertGenreResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -374,7 +375,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -387,7 +388,7 @@ protected:
         err = item.getRequired("id", genreId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", genreId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new CountGenreAudiosCommand(database, genreId, genreName), false);
@@ -406,115 +407,13 @@ private:
     MojObject genreName;
 };
 
-class CountArtistAudiosCommand : public BaseCommand
+class CountArtistAudiosCommand : public CountCollectionAudiosCommand
 {
 public:
     CountArtistAudiosCommand(MojoMediaDatabase *database, const MojObject& artistIdToMerge, const MojObject& artistName) :
-        BaseCommand("CountArtistAudiosCommand", database),
-        query_audios_file_slot(this, &CountArtistAudiosCommand::QueryAudiosFileResponse),
-        query_audios_album_slot(this, &CountArtistAudiosCommand::QueryAudiosAlbumResponse),
-        artist_update_slot(this, &CountArtistAudiosCommand::ArtistUpdateResponse),
-        artistIdToMerge(artistIdToMerge),
-        artistName(artistName),
-        total_tracks(-1),
-        total_albums(-1)
+        CountCollectionAudiosCommand(database, "CountArtistAudiosCommand", "artist", artistIdToMerge, artistName)
     {
     }
-
-    void execute()
-    {
-        MojDbQuery query;
-        query.select("_id");
-        query.from("com.palm.media.audio.file:1");
-        query.where("isRingtone", MojDbQuery::OpEq, MojObject(false));
-        query.where("artist", MojDbQuery::OpEq, artistName);
-
-        MojErr err = database->databaseClient().find(query_audios_file_slot, query);
-        ErrorToException(err);
-
-        MojDbQuery query_album;
-        query_album.select("_id");
-        query_album.from("com.palm.media.audio.album:1");
-        query_album.where("artist", MojDbQuery::OpEq, artistName);
-
-        err = database->databaseClient().find(query_audios_album_slot, query_album);
-        ErrorToException(err);
-    }
-
-protected:
-    MojDbClient::Signal::Slot<CountArtistAudiosCommand> query_audios_file_slot;
-    MojDbClient::Signal::Slot<CountArtistAudiosCommand> query_audios_album_slot;
-    MojDbClient::Signal::Slot<CountArtistAudiosCommand> artist_update_slot;
-
-    MojErr QueryAudiosFileResponse(MojObject &response, MojErr responseErr)
-    {
-        ResponseToException(response, responseErr);
-
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        total_tracks = results.size();
-        return updateAudio();
-    }
-
-    MojErr QueryAudiosAlbumResponse(MojObject &response, MojErr responseErr)
-    {
-        ResponseToException(response, responseErr);
-
-        MojObject results;
-        MojErr err = response.getRequired("results", results);
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        total_albums = results.size();
-        return updateAudio();
-    }
-
-    MojErr updateAudio()
-    {
-        if ((total_tracks == -1) || (total_albums == -1))
-            return MojErrNone;
-
-        MojObject toMerge;
-        toMerge.put("_id", artistIdToMerge);
-
-        MojObject totalObj;
-        totalObj.putInt("tracks", total_tracks);
-        totalObj.putInt("albums", total_albums);
-        toMerge.put("total", totalObj);
-
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        MojErr err = database->databaseClient().merge(artist_update_slot, objects.begin(), objects.end());
-        if (err != MojErrNone) {
-            database->finish();
-            return MojErrNone;
-        }
-
-        return MojErrNone;
-    }
-
-    MojErr ArtistUpdateResponse(MojObject &response, MojErr responseErr)
-    {
-        ResponseToException(response, responseErr);
-
-        database->finish();
-
-        return MojErrNone;
-    }
-
-private:
-    MojObject artistIdToMerge;
-    MojObject artistName;
-    int total_tracks;
-    int total_albums;
 };
 
 class AddArtistForAudioCommand : public BaseCommand
@@ -550,11 +449,11 @@ protected:
 
     MojErr QueryForArtistResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have an artist with the same path we can use it
         if (results.size() > 0)
@@ -581,14 +480,14 @@ protected:
         objectsToInsert.push(artistObj);
 
         err = database->databaseClient().put(insert_artist_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertArtistResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -597,7 +496,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -610,7 +509,7 @@ protected:
         err = item.getRequired("id", artistId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", artistId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new CountArtistAudiosCommand(database, artistId, artistName), false);
@@ -627,4 +526,76 @@ private:
     MediaFile file;
     MojObject idToUpdate;
     MojObject artistName;
+};
+
+/*
+ * Counts an album, genre or artist again after a file left it: removed, or
+ * tagged differently. Nothing to do when its entry is not there.
+ */
+class RecountAudioCollectionCommand : public BaseCommand
+{
+public:
+    enum Collection { Album, Genre, Artist };
+
+    RecountAudioCollectionCommand(MojoMediaDatabase *database, Collection collection, const MojObject& name,
+                                  const MojObject& albumArtist) :
+        BaseCommand("RecountAudioCollectionCommand", database),
+        query_slot(this, &RecountAudioCollectionCommand::QueryResponse),
+        collection(collection),
+        name(name),
+        albumArtist(albumArtist)
+    {
+    }
+
+    void execute()
+    {
+        static const char* const kinds[] = {
+            "com.palm.media.audio.album:1", "com.palm.media.audio.genre:1", "com.palm.media.audio.artist:1"
+        };
+
+        MojDbQuery query;
+        query.select("_id");
+        query.from(kinds[collection]);
+        query.where("name", MojDbQuery::OpEq, name, MojDbCollationPrimary);
+        if (collection == Album)
+            query.where("artist", MojDbQuery::OpEq, albumArtist);
+
+        MojErr err = database->databaseClient().find(query_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    MojDbClient::Signal::Slot<RecountAudioCollectionCommand> query_slot;
+
+    MojErr QueryResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        FailOnError(err);
+
+        MojObject item;
+        if (results.at(0, item)) {
+            MojObject id;
+            err = item.getRequired("_id", id);
+            FailOnError(err);
+
+            if (collection == Album)
+                database->enqueue(new CountAlbumAudiosCommand(database, id, name, albumArtist), false);
+            else if (collection == Genre)
+                database->enqueue(new CountGenreAudiosCommand(database, id, name), false);
+            else
+                database->enqueue(new CountArtistAudiosCommand(database, id, name), false);
+        }
+
+        database->finish();
+
+        return MojErrNone;
+    }
+
+private:
+    Collection collection;
+    MojObject name;
+    MojObject albumArtist;
 };

@@ -31,6 +31,16 @@ namespace mediascanner {
 class DetectedFile;
 class MetadataExtractor;
 
+/* True when a component of the absolute path, after the leading '/', starts
+ * with a dot: such files and folders are not indexed. */
+bool hasHiddenComponent(const std::string &path);
+
+/* True when path is dir itself or lies below it. */
+bool isAtOrBelow(const std::string &path, const std::string &dir);
+
+/* True when path is at or below one of the ignored directories. */
+bool isInIgnoredDirectory(const std::string &path, const std::set<std::string> &ignoredDirectories);
+
 class Scanner final {
 public:
     Scanner();

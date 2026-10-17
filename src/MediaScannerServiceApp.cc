@@ -17,6 +17,9 @@
 #include "config.h"
 #include "MediaScannerServiceApp.hh"
 #include "MojoMediaDatabase.hh"
+#include "Scanner.hh"
+
+#include <sys/stat.h>
 
 int main(int argc, char** argv)
 {
@@ -25,6 +28,8 @@ int main(int argc, char** argv)
 }
 
 const char* const MediaScannerServiceApp::ServiceName = "org.webosports.service.mediaindexer";
+
+static const char* const WallpaperPath = "/usr/share/wallpapers";
 
 MediaScannerServiceApp::MediaScannerServiceApp() :
     db_client(&service),
@@ -49,12 +54,42 @@ MojErr MediaScannerServiceApp::open()
     err = service.open(ServiceName);
     MojErrCheck(err);
 
+    // grantRead, for com.palm.mediapermissions once the user has said yes
+    grants.reset(new PermissionGrantHandler(db_client));
+    MojAllocCheck(grants.get());
+    err = service.addCategory(MojService::DefaultCategory, grants.get());
+    MojErrCheck(err);
+
     err = service.attach(m_reactor.impl());
     MojErrCheck(err);
 
-    media_scanner.setup(ignoredDirectories);
+    // Before any entry is written: new indexes and readers of the kinds
+    database.updateKinds();
+
+    media_scanner.setup(ignoredDirectories, rootPath + "/DCIM");
     media_scanner.addDir(rootPath);
-    media_scanner.addDir("/usr/share/wallpapers");
+    media_scanner.addDir(WallpaperPath);
+
+    // After the scan above has been queued: drop what was deleted, moved away
+    // or hidden while the indexer was not running. Not when the scan found
+    // nothing: unmounted, the folder looks empty, and every entry would go,
+    // with what apps stored in them.
+    if (media_scanner.filesFoundIn(rootPath) == 0) {
+        g_warning("Found no files in %s; not removing entries of files no longer there", rootPath.c_str());
+        return MojErrNone;
+    }
+    const std::string root = rootPath;
+    const std::set<std::string> ignored = ignoredDirectories;
+    database.reconcile([root, ignored](const std::string &path) {
+        if (!mediascanner::isAtOrBelow(path, root) && !mediascanner::isAtOrBelow(path, WallpaperPath))
+            return false;
+        if (mediascanner::hasHiddenComponent(path) || mediascanner::isInIgnoredDirectory(path, ignored))
+            return false;
+        struct stat st;
+        return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+    });
+    // After that: albums, genres and artists that no file is in any more
+    database.recountCollections();
 
     return MojErrNone;
 }

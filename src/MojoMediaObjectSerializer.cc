@@ -29,6 +29,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
 
     err = obj.putString("path", file.path().c_str());
     err = obj.putInt("size", file.size());
+    // As the shared MIME database names it ("application/pdf"): what apps
+    // ask for, rather than file name extensions
+    err = obj.putString("mimeType", file.mimeType().c_str());
 
     if (file.type() == MediaType::AudioMedia) {
         err = obj.putString("_kind", "com.palm.media.audio.file:1");
@@ -51,7 +54,7 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         std::string strDiscPos = std::to_string((file.discPosition()*100000)+file.trackPosition());
 
         MojObject sortKeyObj(MojObject::Type::TypeObject);
-        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+strDiscPos).c_str());
+        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.albumArtist()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("trackAndDisc", strDiscPos.c_str());
@@ -87,7 +90,8 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putInt("playbackPosition", file.playbackPosition());
         err = obj.putString("mediaType", file.mediaType().c_str());
         err = obj.putInt("modifiedTime", file.modifiedTime());
-        err = obj.putBool("appCacheCompleted", file.appCacheCompleted());
+        // appCacheComplete, as the kinds index it
+        err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("searchKey", file.title().c_str());
         err = obj.putString("title", file.title().c_str());
         // FIXME add thumbnails, just empty tag for now
@@ -102,6 +106,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putString("albumPath", file.albumPath().c_str());
         err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("mediaType", file.mediaType().c_str());
+        // The kind's indexes sort albums by these
+        err = obj.putInt("createdTime", file.createdTime());
+        err = obj.putInt("modifiedTime", file.modifiedTime());
         err = obj.putString("type", "local");
         // FIXME add thumbnails, just empty tag for now
         MojObject thumbArr(MojObject::Type::TypeArray);
