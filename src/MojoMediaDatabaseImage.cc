@@ -60,49 +60,6 @@ private:
     MojObject albumId;
 };
 
-class AssignImageToAlbumCommand : public BaseCommand
-{
-public:
-    AssignImageToAlbumCommand(MojoMediaDatabase *database, const MojObject& imageId, const MojObject& albumId) :
-        BaseCommand("AssignImageToAlbumCommand", database),
-        image_update_slot(this, &AssignImageToAlbumCommand::ImageUpdateResponse),
-        imageId(imageId),
-        albumId(albumId)
-    {
-    }
-
-    void execute()
-    {
-        MojObject toMerge;
-        toMerge.put("_id", imageId);
-        toMerge.put("albumId", albumId);
-
-        MojObject::ObjectVec objects;
-        objects.push(toMerge);
-
-        MojErr err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
-        ErrorToException(err);
-    }
-
-protected:
-    MojDbClient::Signal::Slot<AssignImageToAlbumCommand> image_update_slot;
-
-    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
-    {
-        IgnoreIfAbandoned();
-
-        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
-
-        database->finish();
-
-        return MojErrNone;
-    }
-
-private:
-    MojObject imageId;
-    MojObject albumId;
-};
-
 class AddAlbumForImageCommand : public BaseCommand
 {
 public:
@@ -110,6 +67,7 @@ public:
         BaseCommand("AddAlbumForImageCommand", database),
         query_album_slot(this, &AddAlbumForImageCommand::QueryForAlbumResponse),
         insert_album_slot(this, &AddAlbumForImageCommand::InsertAlbumResponse),
+        image_update_slot(this, &AddAlbumForImageCommand::ImageUpdateResponse),
         file(file),
         idToUpdate(idToUpdate)
     {
@@ -133,6 +91,7 @@ public:
 protected:
     MojDbClient::Signal::Slot<AddAlbumForImageCommand> query_album_slot;
     MojDbClient::Signal::Slot<AddAlbumForImageCommand> insert_album_slot;
+    MojDbClient::Signal::Slot<AddAlbumForImageCommand> image_update_slot;
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
@@ -164,7 +123,7 @@ protected:
         albumObj.putBool("toBeDeleted", false);
 
         MojObject totalObj;
-        // image count update will be triggered by the AssignImageToAlbumCommand later
+        // the image count is updated once the image is assigned to it
         totalObj.putInt("images", 0);
         albumObj.put("total", totalObj);
 
@@ -208,7 +167,38 @@ protected:
             FailOnError(err);
         }
 
-        database->enqueue(new AssignImageToAlbumCommand(database, idToUpdate, albumId), false);
+        // The image is assigned in this same command: as a command of its
+        // own it came after whatever was queued meanwhile, such as the
+        // recount after the removal of the album's last other image, which
+        // found the album empty and deleted it
+        this->albumId = albumId;
+        MojObject toMerge;
+        toMerge.put("_id", idToUpdate);
+        toMerge.put("albumId", albumId);
+
+        MojObject::ObjectVec objects;
+        objects.push(toMerge);
+
+        err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
+        FailOnError(err);
+
+        return MojErrNone;
+    }
+
+    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        IgnoreIfAbandoned();
+
+        // The image's entry went meanwhile (the file was removed): nothing to
+        // assign, but the album may be empty now
+        if (responseErr == MojErrDbKindNotSpecified) {
+            database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+            database->finish();
+            return MojErrNone;
+        }
+        FailOnResponseError(response, responseErr);
+
+        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
         database->enqueue(new GenerateAlbumThumbnailsCommand(database, albumId), false);
 
         database->finish();
@@ -219,6 +209,7 @@ protected:
 private:
     MediaFile file;
     MojObject idToUpdate;
+    MojObject albumId;
 };
 
 class GenerateImageThumbnailCommand : public BaseCommand
