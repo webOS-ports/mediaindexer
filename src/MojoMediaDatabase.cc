@@ -130,12 +130,13 @@ private:
 class InsertCommand : public BaseCommand
 {
 public:
-    InsertCommand(MojoMediaDatabase *database, MediaFile file) :
+    InsertCommand(MojoMediaDatabase *database, MediaFile file, std::function<void()> stored) :
         BaseCommand("Insert", database),
-        file(file),
         find_existing_slot(this, &InsertCommand::FindExistingResponse),
         insert_slot(this, &InsertCommand::InsertResponse),
-        update_slot(this, &InsertCommand::UpdateResponse)
+        update_slot(this, &InsertCommand::UpdateResponse),
+        file(file),
+        stored(stored)
     {
     }
 
@@ -231,6 +232,9 @@ protected:
         err = item.getRequired("id", idToUpdate);
         FailOnError(err);
 
+        if (stored)
+            stored();
+
         if (file.type() == ImageMedia && file.albumPath().size() > 0) {
 
             database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path(), file.extension()), false);
@@ -257,12 +261,15 @@ protected:
     MojErr UpdateResponse(MojObject &response, MojErr responseErr)
     {
         FailOnResponseError(response, responseErr);
+        if (stored)
+            stored();
         database->finish();
         return MojErrNone;
     }
 
 private:
     MediaFile file;
+    std::function<void()> stored;
 };
 
 /*
@@ -769,9 +776,9 @@ void MojoMediaDatabase::reconcile(std::function<bool(const std::string&)> stillI
     enqueue(new ReconcileCommand(this, stillIndexed));
 }
 
-void MojoMediaDatabase::insert(const MediaFile &file)
+void MojoMediaDatabase::insert(const MediaFile &file, std::function<void()> stored)
 {
-    enqueue(new InsertCommand(this, file));
+    enqueue(new InsertCommand(this, file, stored));
 }
 
 void MojoMediaDatabase::remove(const std::string &filename)

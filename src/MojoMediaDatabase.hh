@@ -35,7 +35,8 @@ public:
     MojoMediaDatabase(MojDbServiceClient& dbclient);
     ~MojoMediaDatabase();
 
-    void insert(const mediascanner::MediaFile& file);
+    // stored runs once db8 has the entry, not when the insert fails
+    void insert(const mediascanner::MediaFile& file, std::function<void()> stored = nullptr);
     void remove(const std::string& filename);
     void prepareForRebuild(bool withSchemaRebuild);
     // Puts the kinds and their permissions as /etc/palm/db has them, so that

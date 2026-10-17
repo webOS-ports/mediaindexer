@@ -116,14 +116,29 @@ void MediaScanner::removeFilesBelowPath(MediaStore &store, const string &path)
 void MediaScanner::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
     Scanner s;
     vector<DetectedFile> files = s.scanFiles(extractor.get(), subdir, type, ignoredDirectories);
+    set<string> found;
     for(auto &d : files) {
-        // If the file is unchanged, skip it.
-        if (d.etag == store.getETag(d.path))
-            continue;
+        found.insert(d.path);
         try {
+            // If the file is unchanged, skip it.
+            if (d.etag == store.getETag(d.path))
+                continue;
             store.insert(extractor->extract(d));
         } catch(const exception &e) {
             fprintf(stderr, "Error when indexing: %s\n", e.what());
         }
+    }
+
+    // Files deleted, moved away or hidden while the indexer was not running.
+    // Only after a scan of every type: a scan of one type does not see the rest
+    if (type != AllMedia)
+        return;
+    try {
+        for (const auto &path : store.filesBelowPath(subdir)) {
+            if (found.find(path) == found.end())
+                store.remove(path);
+        }
+    } catch(const exception &e) {
+        fprintf(stderr, "Error when removing files no longer there: %s\n", e.what());
     }
 }

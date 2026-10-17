@@ -43,7 +43,14 @@ public:
     void insert(const MediaFile &m);
     void remove(const std::string &fileName);
     void removeFilesBelowPath(const std::string& path);
+    // The files recorded as indexed below the folder
+    std::vector<std::string> filesBelowPath(const std::string& path);
     std::string getETag(const std::string &filename);
+
+private:
+    void setETag(const std::string &path, const std::string &etag);
+
+public:
 
 private:
     sqlite3 *mFileDb;
