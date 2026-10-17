@@ -37,6 +37,12 @@ protected:
         MojErr err = response.getRequired("count", tracks);
         FailOnError(err);
 
+        if (tracks == 0) {
+            err = deleteEntry(database, album_update_slot, albumIdToMerge);
+            FailOnError(err);
+            return MojErrNone;
+        }
+
         MojObject totalObj;
         totalObj.putInt("tracks", tracks);
 
@@ -228,6 +234,12 @@ protected:
 
         MojErr err = response.getRequired("count", total_tracks);
         FailOnError(err);
+
+        if (total_tracks == 0) {
+            err = deleteEntry(database, update_slot, idToMerge);
+            FailOnError(err);
+            return MojErrNone;
+        }
 
         MojDbQuery query_album;
         query_album.select("_id");

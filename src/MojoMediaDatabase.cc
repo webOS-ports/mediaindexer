@@ -206,6 +206,34 @@ static MojErr mergeTotal(MojoMediaDatabase *database, MojDbClient::Signal::SlotR
     return database->databaseClient().merge(slot, objects.begin(), objects.end());
 }
 
+// An album, genre or artist no file is in any more goes
+static MojErr deleteEntry(MojoMediaDatabase *database, MojDbClient::Signal::SlotRef slot, const MojObject &id)
+{
+    MojObject::ObjectVec ids;
+    MojErr err = ids.push(id);
+    MojErrCheck(err);
+    return database->databaseClient().del(slot, ids.begin(), ids.end(), MojDbFlagPurge);
+}
+
+// Deletes a thumbnail the indexer made, named as stored in an entry; only a
+// file directly in its own folder, opened as it was written
+static void deleteThumbnail(const MojObject &thumbnail)
+{
+    MojString path;
+    bool found = false;
+    if (thumbnail.get("path", path, found) != MojErrNone || !found)
+        return;
+    const std::string dir = std::string(THUMBNAIL_DIR) + "/";
+    const std::string p = path.data();
+    if (p.compare(0, dir.size(), dir) != 0 || p.find('/', dir.size()) != std::string::npos || p.size() == dir.size())
+        return;
+    int dirFd = openOwnDirectory(THUMBNAIL_DIR);
+    if (dirFd < 0)
+        return;
+    unlinkat(dirFd, p.c_str() + dir.size(), 0);
+    close(dirFd);
+}
+
 class GenerateAlbumThumbnailsCommand : public BaseCommand
 {
 public:
@@ -231,9 +259,21 @@ private:
 // counted again once it is gone or changed
 static void selectCollections(MojDbQuery &query)
 {
-    static const char* const props[] = { "_kind", "album", "albumArtist", "genre", "artist", "albumId" };
+    static const char* const props[] = { "_kind", "album", "albumArtist", "genre", "artist", "albumId", "appGridThumbnail" };
     for (const char *prop : props)
         query.select(prop);
+}
+
+static void enqueueRecounts(MojoMediaDatabase *database, const MojObject &entry);
+
+// After an entry was removed: what it was in is counted again, and its
+// thumbnail goes
+static void forgetEntry(MojoMediaDatabase *database, const MojObject &entry)
+{
+    enqueueRecounts(database, entry);
+    MojObject thumbnail;
+    if (entry.get("appGridThumbnail", thumbnail))
+        deleteThumbnail(thumbnail);
 }
 
 // Counts again the album, genre and artist, or the image album, an entry was in
@@ -531,7 +571,7 @@ protected:
     {
         FailOnResponseError(response, responseErr);
         for (const MojObject &entry : removedEntries)
-            enqueueRecounts(database, entry);
+            forgetEntry(database, entry);
         return nextPage();
     }
 
@@ -652,7 +692,7 @@ protected:
 
         // Totals of the albums, genres and artists it was in
         for (const MojObject &entry : removedEntries)
-            enqueueRecounts(database, entry);
+            forgetEntry(database, entry);
 
         database->finish();
 

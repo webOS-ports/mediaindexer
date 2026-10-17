@@ -32,6 +32,12 @@ protected:
         MojErr err = response.getRequired("count", images);
         FailOnError(err);
 
+        if (images == 0) {
+            err = deleteEntry(database, album_update_slot, albumId);
+            FailOnError(err);
+            return MojErrNone;
+        }
+
         MojObject totalObj;
         totalObj.putInt("images", images);
 
