@@ -33,7 +33,7 @@ namespace mediascanner
 void CheckErr(MojErr err, const char* filename, int line)
 {
     if(err)
-        throw std::runtime_error(string_format("%s: %d: err %d", filename, line, err));
+        throw std::runtime_error(string_format("%s: %d: err %d", filename, line, (int) err));
 }
 
 void CheckErr(MojObject& response, MojErr err, const char* filename, int line)
@@ -42,10 +42,10 @@ void CheckErr(MojObject& response, MojErr err, const char* filename, int line)
         bool hasErrorText = false;
         MojString errorText;
         if(response.get("errorText", errorText, hasErrorText) == MojErrNone && hasErrorText) {
-            throw std::runtime_error(string_format("%s: %d: err %d message %s", filename, line, err,
+            throw std::runtime_error(string_format("%s: %d: err %d message %s", filename, line, (int) err,
                                                    errorText.data()));
         } else {
-            throw std::runtime_error(string_format("%s: %d: err %d", filename, line, errorText.data()));
+            throw std::runtime_error(string_format("%s: %d: err %d", filename, line, (int) err));
         }
     }
 }

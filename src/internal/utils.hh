@@ -27,7 +27,8 @@ namespace mediascanner {
 std::string sqlQuote(const std::string &input);
 std::string filenameToTitle(const std::string &filename);
 std::string getUri(const std::string &filename);
-std::string string_format(const std::string fmt_str, ...);
+// printf-style; the compiler checks the arguments against the format
+std::string string_format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 }
 
