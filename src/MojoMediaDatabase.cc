@@ -612,6 +612,91 @@ private:
     MojDbQuery::Page page;
 };
 
+/*
+ * Counts every album, genre and artist again, a page at a time, so that the
+ * empty ones go: those left by files removed before empty ones were deleted.
+ */
+class RecountCollectionsCommand : public BaseCommand
+{
+public:
+    RecountCollectionsCommand(MojoMediaDatabase *database, unsigned kind = 0) :
+        BaseCommand("RecountCollections", database),
+        find_slot(this, &RecountCollectionsCommand::FindResponse),
+        kind(kind)
+    {
+    }
+
+    void execute()
+    {
+        MojDbQuery query;
+        query.select("_id");
+        query.select("name");
+        query.select("artist");
+        query.from(Kinds[kind]);
+        query.limit(PageSize);
+        if (havePage)
+            query.page(page);
+
+        MojErr err = database->databaseClient().find(find_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    static const MojUInt32 PageSize = 200;
+    static constexpr const char* Kinds[] = {
+        "com.palm.media.audio.album:1", "com.palm.media.audio.genre:1",
+        "com.palm.media.audio.artist:1", "com.palm.media.image.album:1"
+    };
+
+    MojDbClient::Signal::Slot<RecountCollectionsCommand> find_slot;
+
+    MojErr FindResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        FailOnError(err);
+
+        for (MojObject::ConstArrayIterator it = results.arrayBegin(); it != results.arrayEnd(); ++it) {
+            MojObject id, name, artist;
+            if (!it->get("_id", id))
+                continue;
+            it->get("name", name);
+            it->get("artist", artist);
+            if (kind == 0)
+                database->enqueue(new CountAlbumAudiosCommand(database, id, name, artist), false);
+            else if (kind == 1)
+                database->enqueue(new CountGenreAudiosCommand(database, id, name), false);
+            else if (kind == 2)
+                database->enqueue(new CountArtistAudiosCommand(database, id, name), false);
+            else
+                database->enqueue(new CountAlbumImagesCommand(database, id), false);
+        }
+
+        // The same kind from where this page ended, or the next kind
+        MojObject next;
+        RecountCollectionsCommand *more = nullptr;
+        if (response.get("next", next) && next.type() == MojObject::TypeString) {
+            more = new RecountCollectionsCommand(database, kind);
+            err = more->page.fromObject(next);
+            more->havePage = err == MojErrNone;
+        } else if (kind + 1 < sizeof(Kinds) / sizeof(Kinds[0])) {
+            more = new RecountCollectionsCommand(database, kind + 1);
+        }
+        if (more)
+            database->enqueueFront(more);
+
+        database->finish();
+        return MojErrNone;
+    }
+
+private:
+    unsigned kind;
+    bool havePage = false;
+    MojDbQuery::Page page;
+};
+
 class RemoveCommand : public BaseCommand
 {
 public:
@@ -1031,6 +1116,11 @@ void MojoMediaDatabase::enqueueFront(BaseCommand *command)
 void MojoMediaDatabase::reconcile(std::function<bool(const std::string&)> stillIndexed)
 {
     enqueue(new ReconcileCommand(this, stillIndexed));
+}
+
+void MojoMediaDatabase::recountCollections()
+{
+    enqueue(new RecountCollectionsCommand(this));
 }
 
 void MojoMediaDatabase::insert(const MediaFile &file, std::function<void()> stored)

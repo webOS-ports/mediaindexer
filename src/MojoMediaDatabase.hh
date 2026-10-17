@@ -54,6 +54,8 @@ public:
     void fail(const std::string &message);
     // Removes the entries of files for which stillIndexed(path) is false
     void reconcile(std::function<bool(const std::string&)> stillIndexed);
+    // Counts every album, genre and artist again: the empty ones go
+    void recountCollections();
 
     // The command waiting for db8, if any
     std::string currentCommandName() const;

@@ -88,6 +88,8 @@ MojErr MediaScannerServiceApp::open()
         struct stat st;
         return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
     });
+    // After that: albums, genres and artists that no file is in any more
+    database.recountCollections();
 
     return MojErrNone;
 }
