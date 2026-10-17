@@ -45,9 +45,11 @@ public:
     void setup(const std::set<std::string> dirsToIgnore, const std::string &cameraDirectory);
     void addDir(const std::string &dir);
     void removeDir(const std::string &dir);
+    // How many files the scan of dir found when it was added
+    size_t filesFoundIn(const std::string &dir) const;
 
 private:
-    void readFiles(MediaStore &store, const std::string &subdir, const MediaType type);
+    size_t readFiles(MediaStore &store, const std::string &subdir, const MediaType type);
     void removeFilesBelowPath(MediaStore &store, const std::string &path);
 
     int sigint_id, sigterm_id;
@@ -55,6 +57,7 @@ private:
     std::unique_ptr<MetadataExtractor> extractor;
     std::map<std::string, std::unique_ptr<SubtreeWatcher>> subtrees;
     std::set<std::string> ignoredDirectories;
+    std::map<std::string, size_t> filesFound;
 };
 
 } // namespace mediascanner

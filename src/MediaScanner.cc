@@ -94,7 +94,7 @@ void MediaScanner::addDir(const string &dir) {
     }
 
     unique_ptr<SubtreeWatcher> sw(new SubtreeWatcher(*store.get(), *extractor.get(), ignoredDirectories));
-    readFiles(*store.get(), dir, AllMedia);
+    filesFound[dir] = readFiles(*store.get(), dir, AllMedia);
     sw->addDir(dir);
     subtrees[dir] = move(sw);
 }
@@ -108,12 +108,18 @@ void MediaScanner::removeDir(const string &dir) {
     removeFilesBelowPath(*store.get(), dir);
 }
 
+size_t MediaScanner::filesFoundIn(const string &dir) const
+{
+    auto it = filesFound.find(dir);
+    return it == filesFound.end() ? 0 : it->second;
+}
+
 void MediaScanner::removeFilesBelowPath(MediaStore &store, const string &path)
 {
     store.removeFilesBelowPath(path);
 }
 
-void MediaScanner::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
+size_t MediaScanner::readFiles(MediaStore &store, const string &subdir, const MediaType type) {
     Scanner s;
     vector<DetectedFile> files = s.scanFiles(extractor.get(), subdir, type, ignoredDirectories);
     set<string> found;
@@ -130,9 +136,12 @@ void MediaScanner::readFiles(MediaStore &store, const string &subdir, const Medi
     }
 
     // Files deleted, moved away or hidden while the indexer was not running.
-    // Only after a scan of every type: a scan of one type does not see the rest
-    if (type != AllMedia)
-        return;
+    // Only after a scan of every type: a scan of one type does not see the rest.
+    // And not when the scan found nothing at all: a folder not mounted yet
+    // looks empty, and taking that as every file deleted would drop every
+    // entry, with what apps stored in them.
+    if (type != AllMedia || files.empty())
+        return files.size();
     try {
         for (const auto &path : store.filesBelowPath(subdir)) {
             if (found.find(path) == found.end())
@@ -141,4 +150,5 @@ void MediaScanner::readFiles(MediaStore &store, const string &subdir, const Medi
     } catch(const exception &e) {
         fprintf(stderr, "Error when removing files no longer there: %s\n", e.what());
     }
+    return files.size();
 }

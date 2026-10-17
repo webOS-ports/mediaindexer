@@ -65,7 +65,13 @@ MojErr MediaScannerServiceApp::open()
     media_scanner.addDir(WallpaperPath);
 
     // After the scan above has been queued: drop what was deleted, moved away
-    // or hidden while the indexer was not running
+    // or hidden while the indexer was not running. Not when the scan found
+    // nothing: unmounted, the folder looks empty, and every entry would go,
+    // with what apps stored in them.
+    if (media_scanner.filesFoundIn(rootPath) == 0) {
+        g_warning("Found no files in %s; not removing entries of files no longer there", rootPath.c_str());
+        return MojErrNone;
+    }
     const std::string root = rootPath;
     const std::set<std::string> ignored = ignoredDirectories;
     database.reconcile([root, ignored](const std::string &path) {

@@ -2,6 +2,7 @@
 Description=LuneOS Media Indexing Service
 Requires=ls-hubd.service
 After=ls-hubd.service configurator.service
+RequiresMountsFor=/media/internal
 
 [Service]
 Type=simple
