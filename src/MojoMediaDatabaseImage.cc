@@ -229,45 +229,70 @@ private:
 class GenerateImageThumbnailCommand : public BaseCommand
 {
 public:
-    GenerateImageThumbnailCommand(MojoMediaDatabase *database, const MojObject& imageId, const std::string& imagePath, const std::string& extension) :
+    GenerateImageThumbnailCommand(MojoMediaDatabase *database, const MojObject& imageId, const std::string& imagePath) :
         BaseCommand("GenerateImageThumbnailCommand", database),
         update_image_slot(this, &GenerateImageThumbnailCommand::UpdateImageResponse),
         imageId(imageId),
-        imagePath(imagePath),
-        extension(extension)
+        imagePath(imagePath)
     {
     }
 
     void execute()
     {
-        // path for thumbnails /media/internal/.thumbnails/<some path>
+        // Runs long after the file was found: opened without following
+        // links, and read only if it is still a regular file
+        QImage origImage;
+        int imageFd = open(imagePath.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+        struct stat st;
+        if (imageFd >= 0 && fstat(imageFd, &st) == 0 && S_ISREG(st.st_mode)) {
+            QFile imageFile;
+            if (imageFile.open(imageFd, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
+                origImage.load(&imageFile, nullptr);
+                imageFile.close();
+                imageFd = -1;
+            }
+        }
+        if (imageFd >= 0)
+            close(imageFd);
+        if (origImage.isNull()) {
+            database->fail("could not read " + imagePath);
+            return;
+        }
 
-        GChecksum *checksum;
-        checksum = g_checksum_new(G_CHECKSUM_MD5);
-        g_checksum_update(checksum, (const guchar *) imagePath.c_str(), imagePath.length());
+        // Only ever smaller
+        int width = Settings::LunaSettings()->gridUnit * 8;
+        QImage thumbnailImage = origImage.width() > width ?
+            origImage.scaledToWidth(width, Qt::SmoothTransformation) : origImage;
 
-        guint8 digest[16];
-        gsize digest_len = sizeof (digest);
-        g_checksum_get_digest(checksum, digest, &digest_len);
+        // Named after the image's path, in /media/internal/.thumbnails; PNG
+        // where the image has transparency, JPEG otherwise
+        const char *format = thumbnailImage.hasAlphaChannel() ? "png" : "jpg";
+        gchar *digest = g_compute_checksum_for_string(G_CHECKSUM_MD5, imagePath.c_str(), imagePath.length());
+        std::string fileName = std::string(digest) + "." + format;
+        g_free(digest);
+        std::string thumbnailPath = std::string(THUMBNAIL_DIR) + "/" + fileName;
 
-        char *file = g_strconcat(g_checksum_get_string(checksum), ".", extension.c_str(), NULL);
-        char *thumbnailPath = g_build_filename(THUMBNAIL_DIR, file, NULL);
-        g_checksum_free(checksum);
-
-        if (!g_file_test(THUMBNAIL_DIR, G_FILE_TEST_IS_DIR))
-            g_mkdir_with_parents(THUMBNAIL_DIR, 0755);
-
-        int gridUnit = Settings::LunaSettings()->gridUnit;
-        QImage origImage(QString::fromStdString(imagePath));
-        QImage thumbnailImage = origImage.scaledToWidth((gridUnit * 8), Qt::SmoothTransformation);
-        thumbnailImage.save(QString(thumbnailPath));
+        // Thumbnails are written as root below /media/internal, where users
+        // can write: see writeFileInOwnDirectory()
+        bool written = writeFileInOwnDirectory(THUMBNAIL_DIR, fileName, [&thumbnailImage, format](int fd) {
+            QFile file;
+            if (!file.open(fd, QIODevice::WriteOnly, QFileDevice::DontCloseHandle))
+                return false;
+            bool saved = thumbnailImage.save(&file, format);
+            file.close();
+            return saved;
+        });
+        if (!written) {
+            database->fail("could not write " + thumbnailPath + ": " + strerror(errno));
+            return;
+        }
 
         MojObject toMerge;
         toMerge.put("_id", imageId);
 
 
         MojObject appGridThumbnail;
-        appGridThumbnail.putString("path", thumbnailPath);
+        appGridThumbnail.putString("path", thumbnailPath.c_str());
         appGridThumbnail.putBool("cached", true);
 
         MojObject dimensions;
@@ -287,9 +312,6 @@ public:
 
         MojErr err = database->databaseClient().merge(update_image_slot, objects.begin(), objects.end());
         ErrorToException(err);
-
-        g_free(file);
-        g_free(thumbnailPath);
     }
 
 protected:
@@ -305,5 +327,4 @@ protected:
 private:
     MojObject imageId;
     std::string imagePath;
-    std::string extension;
 };

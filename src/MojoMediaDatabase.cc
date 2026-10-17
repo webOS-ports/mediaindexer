@@ -14,7 +14,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QFile>
 #include <QImage>
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
 
 #include <Settings.h>
 
@@ -237,7 +244,7 @@ protected:
 
         if (file.type() == ImageMedia && file.albumPath().size() > 0) {
 
-            database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path(), file.extension()), false);
+            database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path()), false);
             database->enqueue(new AddAlbumForImageCommand(database, file, idToUpdate), false);
         }
         else if (file.type() == AudioMedia) {

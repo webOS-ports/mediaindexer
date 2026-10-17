@@ -24,6 +24,10 @@
 #include<glib.h>
 #include <memory>
 #include <stdarg.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,5 +108,48 @@ std::string getUri(const std::string &filename) {
     return uri;
 }
 
+int openOwnDirectory(const char *path)
+{
+    if (mkdir(path, 0755) != 0 && errno != EEXIST)
+        return -1;
+    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    struct stat st;
+    if (fstat(fd, &st) != 0 || st.st_uid != geteuid() || (st.st_mode & (S_IWGRP | S_IWOTH))) {
+        close(fd);
+        errno = EPERM;
+        return -1;
+    }
+    return fd;
 }
 
+bool writeFileInOwnDirectory(const char *directory, const std::string &fileName,
+                             const std::function<bool(int fd)> &write)
+{
+    int dirFd = openOwnDirectory(directory);
+    if (dirFd < 0)
+        return false;
+
+    // Written beside its name and renamed into place: a link put at the name
+    // is replaced rather than followed, and readers never see half a file
+    std::string tmpName = "." + fileName + ".tmp";
+    unlinkat(dirFd, tmpName.c_str(), 0);
+    bool written = false;
+    int fd = openat(dirFd, tmpName.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+        written = write(fd);
+        written = close(fd) == 0 && written;
+        written = written && renameat(dirFd, tmpName.c_str(), dirFd, fileName.c_str()) == 0;
+        int saved = errno;
+        if (!written)
+            unlinkat(dirFd, tmpName.c_str(), 0);
+        errno = saved;
+    }
+    int saved = errno;
+    close(dirFd);
+    errno = saved;
+    return written;
+}
+
+}
