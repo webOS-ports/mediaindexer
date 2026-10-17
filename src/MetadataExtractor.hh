@@ -51,11 +51,21 @@ public:
 
     DetectedFile detect(const std::string &path);
     MediaFile extract(const DetectedFile &media);
-    void extractForAudio(MediaFile &mf, const DetectedFile &d);
+    // Reads the tags through fd, the file's descriptor
+    void extractForAudio(MediaFile &mf, int fd);
     void extractForImage(MediaFile &mf, const DetectedFile &d);
 
     std::string getAlbumPathFromImage(const std::string& path);
     std::string getAlbumNameFromPath(const std::string& path);
+
+    // Images below it form the one camera album
+    void setCameraDirectory(const std::string &path);
+
+    static const char* const CameraAlbumPath;
+    static const char* const CameraAlbumName;
+
+private:
+    std::string cameraDirectory = "/media/internal/DCIM";
 };
 
 }

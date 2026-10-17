@@ -29,7 +29,6 @@
 #include <string>
 #include <stdexcept>
 #include <memory>
-#include <libgen.h>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -37,16 +36,22 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
 
 #include <taglib/taglib.h>
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
+#include <taglib/tfilestream.h>
 
 using namespace std;
 
 namespace mediascanner
 {
+
+const char* const MetadataExtractor::CameraAlbumPath = "camera://";
+const char* const MetadataExtractor::CameraAlbumName = "Camera";
 
 MetadataExtractor::MetadataExtractor(int seconds)
 {
@@ -104,76 +109,108 @@ DetectedFile MetadataExtractor::detect(const std::string &path)
     return DetectedFile(path, etag, content_type, type);
 }
 
-const char *get_filename_extension(const char *filename)
+// After the last dot of the file name; none for ".hidden" or "name."
+static std::string get_filename_extension(const std::string &fileName)
 {
-    const char *dot = strrchr(filename, '.');
-    if(!dot || dot == filename) return "";
-    return dot + 1;
+    size_t dot = fileName.find_last_of('.');
+    if (dot == std::string::npos || dot == 0)
+        return "";
+    return fileName.substr(dot + 1);
 }
 
-void MetadataExtractor::extractForAudio(MediaFile &mf, const DetectedFile &d)
+// "5" or "5/12": a missing or unreadable part leaves the value as it is
+static void parsePosition(const TagLib::StringList &values, unsigned int &position, unsigned int &total)
 {
-    TagLib::FileRef file(d.path.c_str());
+    if (values.isEmpty())
+        return;
+    TagLib::StringList parts = values.front().split("/");
+    if (parts.size() >= 1 && parts[0].toInt() > 0)
+        position = parts[0].toInt();
+    if (parts.size() == 2 && parts[1].toInt() > 0)
+        total = parts[1].toInt();
+}
 
-    if (!file.isNull()) {
+void MetadataExtractor::extractForAudio(MediaFile &mf, int fd)
+{
+    // TagLib closes the descriptor it reads from; ours stays with extract()
+    int streamFd = dup(fd);
+    if (streamFd < 0)
+        return;
+    TagLib::FileStream stream(streamFd, true);
+    if (!stream.isOpen()) {
+        close(streamFd);
+        return;
+    }
+    TagLib::FileRef file(&stream);
+
+    if (!file.isNull() && file.tag()) {
 
         TagLib::PropertyMap tags = file.file()->properties();
 
+        // toCString(true): UTF-8, not Latin-1
         if (tags.contains("ALBUM"))
-            mf.setAlbum(file.tag()->album().toCString());
+            mf.setAlbum(file.tag()->album().toCString(true));
         if (tags.contains("ARTIST"))
-            mf.setArtist(file.tag()->artist().toCString());
+            mf.setArtist(file.tag()->artist().toCString(true));
         if (tags.contains("TITLE"))
-            mf.setTitle(file.tag()->title().toCString());
+            mf.setTitle(file.tag()->title().toCString(true));
         if (tags.contains("GENRE"))
-            mf.setGenre(file.tag()->genre().toCString());
+            mf.setGenre(file.tag()->genre().toCString(true));
         mf.setTrackPosition(file.tag()->track());
         mf.setYear(file.tag()->year());
 
         if (tags.contains("ALBUMARTIST")) {
             TagLib::StringList values = tags["ALBUMARTIST"];
-             mf.setAlbumArtist(values.toString(", ").toCString());
+            mf.setAlbumArtist(values.toString(", ").toCString(true));
         }
         else {
             mf.setAlbumArtist(mf.artist());
         }
 
-        if (tags.contains("TRACKNUMBER")) {
-            TagLib::StringList values = tags["TRACKNUMBER"];
-            TagLib::StringList trackNumberParts = values.toString().split("/");
-            if (trackNumberParts.size() == 2) {
-                mf.setTrackPosition(trackNumberParts[0].toInt());
-                mf.setTrackTotal(trackNumberParts[1].toInt());
-            }
-        }
+        unsigned int position = mf.trackPosition(), total = mf.trackTotal();
+        if (tags.contains("TRACKNUMBER"))
+            parsePosition(tags["TRACKNUMBER"], position, total);
+        mf.setTrackPosition(position);
+        mf.setTrackTotal(total);
 
-        if (tags.contains("DISCNUMBER")) {
-            TagLib::StringList values = tags["DISCNUMBER"];
-            TagLib::StringList discNumberParts = values.toString().split("/");
-            if (discNumberParts.size() == 2) {
-                mf.setDiscTotal(discNumberParts[1].toInt());
-            }
-        }
+        position = mf.discPosition();
+        total = mf.discTotal();
+        if (tags.contains("DISCNUMBER"))
+            parsePosition(tags["DISCNUMBER"], position, total);
+        mf.setDiscPosition(position);
+        mf.setDiscTotal(total);
 
         // FIXME parse for more tags. See http://taglib.github.io/api/classTagLib_1_1PropertyMap.html#a8b0c96a6df5b64a36654dc843b2375bc
         // for a list of possible available tags
     }
 }
 
+void MetadataExtractor::setCameraDirectory(const std::string &path)
+{
+    cameraDirectory = path;
+}
+
+static std::string asciiLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return g_ascii_tolower((gchar) c); });
+    return s;
+}
+
 std::string MetadataExtractor::getAlbumPathFromImage(const std::string& path)
 {
-    std::string pathInLower = path;
-    std::transform(pathInLower.begin(), pathInLower.end(), pathInLower.begin(), ::tolower);
-
-    std::string dcimPath = "/media/internal/dcim";
-    if (pathInLower.substr(0, dcimPath.size()) == dcimPath)
-        return std::string("camera://");
+    // Whatever the case of "DCIM", and only that folder: not "DCIMfoo"
+    std::string pathInLower = asciiLower(path);
+    std::string dcimPath = asciiLower(cameraDirectory) + "/";
+    if (!cameraDirectory.empty() && pathInLower.compare(0, dcimPath.size(), dcimPath) == 0)
+        return CameraAlbumPath;
 
     return path.substr(0, path.find_last_of("/"));
 }
 
 std::string MetadataExtractor::getAlbumNameFromPath(const std::string& path)
 {
+    if (path == CameraAlbumPath)
+        return CameraAlbumName;
     return path.substr(path.find_last_of("/") + 1, path.size() - 1);
 }
 
@@ -189,29 +226,38 @@ void MetadataExtractor::extractForImage(MediaFile &mf, const DetectedFile &d)
 
 MediaFile MetadataExtractor::extract(const DetectedFile &d)
 {
+    // Read through one descriptor, and only if it is a regular file: a FIFO
+    // put in its place since it was found would block the main loop, a link
+    // would be followed
+    int fd = open(d.path.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0)
+        throw runtime_error("Could not open " + d.path + ": " + strerror(errno));
+    std::unique_ptr<int, void(*)(int*)> closer(&fd, [](int *f) { close(*f); });
+
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode))
+        throw runtime_error(d.path + " is not a regular file");
+
     MediaFile mf;
     mf.setPath(d.path);
     mf.setEtag(d.etag);
     mf.setType(d.type);
     mf.setMimeType(d.content_type);
 
-    std::string fileNameWithExtension = basename(const_cast<char *>(d.path.c_str()));
+    std::string fileNameWithExtension = d.path.substr(d.path.find_last_of('/') + 1);
     std::string pureFileName = fileNameWithExtension.substr(0, fileNameWithExtension.find_last_of("."));
 
     mf.setName(pureFileName);
-    mf.setExtension(get_filename_extension(d.path.c_str()));
+    mf.setExtension(get_filename_extension(fileNameWithExtension));
 
     // FIXME better take the creation time of the file itself and not when we have discovered the file
     mf.setCreatedTime(time(NULL));
 
-    struct stat st;
-    if (stat(d.path.c_str(), &st) == 0) {
-        mf.setModifiedTime(st.st_mtime);
-        mf.setSize(st.st_size);
-    }
+    mf.setModifiedTime(st.st_mtime);
+    mf.setSize(st.st_size);
 
     if (d.type == AudioMedia)
-        extractForAudio(mf, d);
+        extractForAudio(mf, fd);
     else if (d.type == ImageMedia)
         extractForImage(mf, d);
 

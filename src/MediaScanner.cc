@@ -66,9 +66,10 @@ MediaScanner::MediaScanner(MojoMediaDatabase *mojoDb) :
     extractor.reset(new MetadataExtractor());
 }
 
-void MediaScanner::setup(const std::set<std::string> dirsToIgnore)
+void MediaScanner::setup(const std::set<std::string> dirsToIgnore, const std::string &cameraDirectory)
 {
     ignoredDirectories = dirsToIgnore;
+    extractor->setCameraDirectory(cameraDirectory);
 }
 
 MediaScanner::~MediaScanner() {

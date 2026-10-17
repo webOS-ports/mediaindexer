@@ -60,7 +60,7 @@ MojErr MediaScannerServiceApp::open()
     // Before any entry is written: new indexes and readers of the kinds
     database.updateKinds();
 
-    media_scanner.setup(ignoredDirectories);
+    media_scanner.setup(ignoredDirectories, rootPath + "/DCIM");
     media_scanner.addDir(rootPath);
     media_scanner.addDir(WallpaperPath);
 

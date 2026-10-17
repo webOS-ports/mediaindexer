@@ -42,7 +42,7 @@ public:
     MediaScanner(MojoMediaDatabase *mojoDb);
     ~MediaScanner();
 
-    void setup(const std::set<std::string> dirsToIgnore);
+    void setup(const std::set<std::string> dirsToIgnore, const std::string &cameraDirectory);
     void addDir(const std::string &dir);
     void removeDir(const std::string &dir);
 
