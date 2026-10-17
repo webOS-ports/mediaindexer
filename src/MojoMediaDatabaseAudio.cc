@@ -28,7 +28,7 @@ protected:
 
     MojErr QueryAudiosResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -58,7 +58,7 @@ protected:
 
     MojErr AlbumUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -103,11 +103,11 @@ protected:
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have an album with the same path we can use it
         if (results.size() > 0)
@@ -135,14 +135,14 @@ protected:
         objectsToInsert.push(albumObj);
 
         err = database->databaseClient().put(insert_album_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -151,7 +151,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -164,7 +164,7 @@ protected:
         err = item.getRequired("id", albumId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", albumId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new CountAlbumAudiosCommand(database, albumId, albumName), false);
@@ -225,7 +225,7 @@ protected:
 
     MojErr QueryAudiosFileResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -240,7 +240,7 @@ protected:
 
     MojErr QueryAudiosAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -280,7 +280,7 @@ protected:
 
     MojErr GenreUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -327,11 +327,11 @@ protected:
 
     MojErr QueryForGenreResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have a genre with the same path we can use it
         if (results.size() > 0)
@@ -358,14 +358,14 @@ protected:
         objectsToInsert.push(genreObj);
 
         err = database->databaseClient().put(insert_genre_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertGenreResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -374,7 +374,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -387,7 +387,7 @@ protected:
         err = item.getRequired("id", genreId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", genreId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new CountGenreAudiosCommand(database, genreId, genreName), false);
@@ -448,7 +448,7 @@ protected:
 
     MojErr QueryAudiosFileResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -463,7 +463,7 @@ protected:
 
     MojErr QueryAudiosAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -503,7 +503,7 @@ protected:
 
     MojErr ArtistUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -550,11 +550,11 @@ protected:
 
     MojErr QueryForArtistResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have an artist with the same path we can use it
         if (results.size() > 0)
@@ -581,14 +581,14 @@ protected:
         objectsToInsert.push(artistObj);
 
         err = database->databaseClient().put(insert_artist_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertArtistResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateAudio(response);
     }
@@ -597,7 +597,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -610,7 +610,7 @@ protected:
         err = item.getRequired("id", artistId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", artistId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new CountArtistAudiosCommand(database, artistId, artistName), false);

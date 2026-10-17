@@ -17,6 +17,9 @@
 #include "config.h"
 #include "MediaScannerServiceApp.hh"
 #include "MojoMediaDatabase.hh"
+#include "Scanner.hh"
+
+#include <sys/stat.h>
 
 int main(int argc, char** argv)
 {
@@ -25,6 +28,8 @@ int main(int argc, char** argv)
 }
 
 const char* const MediaScannerServiceApp::ServiceName = "org.webosports.service.mediaindexer";
+
+static const char* const WallpaperPath = "/usr/share/wallpapers";
 
 MediaScannerServiceApp::MediaScannerServiceApp() :
     db_client(&service),
@@ -54,7 +59,20 @@ MojErr MediaScannerServiceApp::open()
 
     media_scanner.setup(ignoredDirectories);
     media_scanner.addDir(rootPath);
-    media_scanner.addDir("/usr/share/wallpapers");
+    media_scanner.addDir(WallpaperPath);
+
+    // After the scan above has been queued: drop what was deleted, moved away
+    // or hidden while the indexer was not running
+    const std::string root = rootPath;
+    const std::set<std::string> ignored = ignoredDirectories;
+    database.reconcile([root, ignored](const std::string &path) {
+        if (!mediascanner::isAtOrBelow(path, root) && !mediascanner::isAtOrBelow(path, WallpaperPath))
+            return false;
+        if (mediascanner::hasHiddenComponent(path) || mediascanner::isInIgnoredDirectory(path, ignored))
+            return false;
+        struct stat st;
+        return lstat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+    });
 
     return MojErrNone;
 }

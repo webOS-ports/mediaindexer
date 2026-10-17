@@ -60,6 +60,34 @@ void CheckErr(MojObject& response, MojErr err, const char* filename, int line)
         if(err) CheckErr(response, err, __FILE__, __LINE__); \
     } while(0);
 
+std::string DescribeErr(MojObject& response, MojErr err, const char* filename, int line)
+{
+    bool hasErrorText = false;
+    MojString errorText;
+    if (response.get("errorText", errorText, hasErrorText) == MojErrNone && hasErrorText)
+        return string_format("%s: %d: err %d message %s", filename, line, (int) err, errorText.data());
+    return string_format("%s: %d: err %d", filename, line, (int) err);
+}
+
+// In the handlers of database replies: an exception thrown there would not
+// reach executeNextCommand(), and the command would never finish, which
+// stops the whole queue. So a failure ends the command instead.
+#define FailOnError(err) \
+    do { \
+        if(err) { \
+            database->fail(string_format("%s: %d: err %d", __FILE__, __LINE__, (int) (err))); \
+            return MojErrNone; \
+        } \
+    } while(0)
+
+#define FailOnResponseError(response, err) \
+    do { \
+        if(err) { \
+            database->fail(DescribeErr(response, err, __FILE__, __LINE__)); \
+            return MojErrNone; \
+        } \
+    } while(0)
+
 class BaseCommand : public MojSignalHandler
 {
 public:
@@ -106,7 +134,8 @@ public:
         BaseCommand("Insert", database),
         file(file),
         find_existing_slot(this, &InsertCommand::FindExistingResponse),
-        insert_slot(this, &InsertCommand::InsertResponse)
+        insert_slot(this, &InsertCommand::InsertResponse),
+        update_slot(this, &InsertCommand::UpdateResponse)
     {
     }
 
@@ -131,39 +160,61 @@ public:
 protected:
     MojDbClient::Signal::Slot<InsertCommand> find_existing_slot;
     MojDbClient::Signal::Slot<InsertCommand> insert_slot;
+    MojDbClient::Signal::Slot<InsertCommand> update_slot;
 
     MojErr FindExistingResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
-
-        if (results.size() > 0) {
-            // FIXME update it with new meta data
-            database->finish();
-            return MojErrNone;
-        }
+        FailOnError(err);
 
         MojObject::ObjectVec objectsToInsert;
         MojObject mediaObj;
         MojoMediaObjectSerializer::SerializeToDatabaseObject(file, mediaObj);
+
+        MojObject existing;
+        if (results.size() > 0 && results.at(0, existing)) {
+            // A file written again: its size, times and tags change. What
+            // apps keep in the entry (a bookmark, a play position, thumbnails)
+            // and when it was first found stay as they are.
+            static const char* const keptFields[] = {
+                "bookmark", "playbackPosition", "lastPlayTime", "thumbnails", "serviced",
+                "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime"
+            };
+            for (const char* field : keptFields) {
+                bool deleted = false;
+                err = mediaObj.del(field, deleted);
+                FailOnError(err);
+            }
+            MojObject existingId;
+            err = existing.getRequired("_id", existingId);
+            FailOnError(err);
+            err = mediaObj.put("_id", existingId);
+            FailOnError(err);
+            err = objectsToInsert.push(mediaObj);
+            FailOnError(err);
+            err = database->databaseClient().merge(update_slot, objectsToInsert.begin(), objectsToInsert.end());
+            FailOnError(err);
+            return MojErrNone;
+        }
+
         objectsToInsert.push(mediaObj);
 
         err = database->databaseClient().put(insert_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         if (results.size() == 0) {
             database->finish();
@@ -178,7 +229,7 @@ protected:
 
         MojObject idToUpdate;
         err = item.getRequired("id", idToUpdate);
-        ErrorToException(err);
+        FailOnError(err);
 
         if (file.type() == ImageMedia && file.albumPath().size() > 0) {
 
@@ -203,8 +254,134 @@ protected:
         return MojErrNone;
     }
 
+    MojErr UpdateResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+        database->finish();
+        return MojErrNone;
+    }
+
 private:
     MediaFile file;
+};
+
+/*
+ * Removes the entries of files that are no longer there to index: deleted,
+ * moved away or into a hidden folder while the indexer was not running, or
+ * below a folder that is now ignored. Goes through every entry, a page at a
+ * time.
+ */
+class ReconcileCommand : public BaseCommand
+{
+public:
+    ReconcileCommand(MojoMediaDatabase *database, std::function<bool(const std::string&)> stillIndexed) :
+        BaseCommand("Reconcile", database),
+        find_slot(this, &ReconcileCommand::FindResponse),
+        remove_slot(this, &ReconcileCommand::RemoveResponse),
+        stillIndexed(stillIndexed),
+        removed(0)
+    {
+    }
+
+    void execute()
+    {
+        MojDbQuery query;
+        query.select("_id");
+        query.select("path");
+        query.from("com.palm.media.file:1");
+        query.limit(PageSize);
+        if (havePage)
+            query.page(page);
+
+        MojErr err = database->databaseClient().find(find_slot, query);
+        ErrorToException(err);
+    }
+
+protected:
+    static const MojUInt32 PageSize = 200;
+
+    MojDbClient::Signal::Slot<ReconcileCommand> find_slot;
+    MojDbClient::Signal::Slot<ReconcileCommand> remove_slot;
+
+    MojErr FindResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+
+        MojObject results;
+        MojErr err = response.getRequired("results", results);
+        FailOnError(err);
+
+        MojObject::ObjectVec removeIds;
+        for (MojSize n = 0; n < results.size(); n++) {
+            MojObject item;
+            if (!results.at(n, item))
+                continue;
+
+            MojString pathStr;
+            bool havePath = false;
+            err = item.get("path", pathStr, havePath);
+            FailOnError(err);
+            if (havePath && stillIndexed(pathStr.data()))
+                continue;
+
+            MojObject idToRemove;
+            err = item.getRequired("_id", idToRemove);
+            FailOnError(err);
+            err = removeIds.push(idToRemove);
+            FailOnError(err);
+        }
+
+        MojObject next;
+        havePage = response.get("next", next) && next.type() == MojObject::TypeString;
+        if (havePage) {
+            err = page.fromObject(next);
+            FailOnError(err);
+        }
+
+        if (removeIds.size() > 0) {
+            removed += static_cast<unsigned long>(removeIds.size());
+            err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
+            FailOnError(err);
+            return MojErrNone;
+        }
+
+        return nextPage();
+    }
+
+    MojErr RemoveResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+        return nextPage();
+    }
+
+    MojErr nextPage()
+    {
+        if (havePage) {
+            // The same command again, from where this page ended
+            database->enqueueFront(new ReconcileCommand(*this));
+        } else {
+            g_message("Reconciled the index: %lu entries of files no longer there removed", removed);
+        }
+        database->finish();
+        return MojErrNone;
+    }
+
+private:
+    ReconcileCommand(const ReconcileCommand& other) :
+        BaseCommand("Reconcile", other.database),
+        find_slot(this, &ReconcileCommand::FindResponse),
+        remove_slot(this, &ReconcileCommand::RemoveResponse),
+        stillIndexed(other.stillIndexed),
+        removed(other.removed),
+        havePage(other.havePage),
+        page(other.page)
+    {
+    }
+
+    std::function<bool(const std::string&)> stillIndexed;
+    unsigned long removed;
+    bool havePage = false;
+    MojDbQuery::Page page;
 };
 
 class RemoveCommand : public BaseCommand
@@ -242,11 +419,11 @@ protected:
 
     MojErr QueryForRemovalResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         if (results.size() == 0) {
             database->finish();
@@ -262,21 +439,21 @@ protected:
 
             MojObject idToRemove;
             err = item.getRequired("_id", idToRemove);
-            ErrorToException(err);
+            FailOnError(err);
 
             err = removeIds.push(idToRemove);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr RemoveResponse(MojObject &response, MojErr err)
     {
-        ResponseToException(response, err);
+        FailOnResponseError(response, err);
 
         database->finish();
 
@@ -323,7 +500,7 @@ protected:
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         if (results.size() == 0) {
             database->finish();
@@ -339,21 +516,21 @@ protected:
 
             MojObject idToRemove;
             err = item.getRequired("_id", idToRemove);
-            ErrorToException(err);
+            FailOnError(err);
 
             err = removeIds.push(idToRemove);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         err = database->databaseClient().del(remove_slot, removeIds.begin(), removeIds.end(), MojDbFlagPurge);
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr RemoveResponse(MojObject &response, MojErr err)
     {
-        ResponseToException(response, err);
+        FailOnResponseError(response, err);
 
         database->finish();
 
@@ -384,12 +561,18 @@ public:
             kindContent == 0 ||
             kindContentLength == 0) {
 
+            g_free(kindContent);
             database->finish();
             return;
         }
 
         MojObject kindObj;
-        kindObj.fromJson(kindContent, kindContentLength);
+        MojErr parseErr = kindObj.fromJson(kindContent, kindContentLength);
+        g_free(kindContent);
+        if (parseErr) {
+            database->fail("could not read " + kindPath);
+            return;
+        }
 
         MojErr err = database->databaseClient().putKind(put_slot, kindObj);
         ErrorToException(err);
@@ -401,7 +584,7 @@ protected:
 
     MojErr PutResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         gchar *permissionsContent = 0;
         gsize permissionsContentLength = 0;
@@ -414,12 +597,18 @@ protected:
             permissionsContent == 0 ||
             permissionsContentLength == 0) {
 
+            g_free(permissionsContent);
             database->finish();
             return MojErrNone;
         }
 
         MojObject permissions;
-        permissions.fromJson(permissionsContent, permissionsContentLength);
+        MojErr parseErr = permissions.fromJson(permissionsContent, permissionsContentLength);
+        g_free(permissionsContent);
+        if (parseErr) {
+            database->fail("could not read " + permissionsPath);
+            return MojErrNone;
+        }
 
         MojObject perms;
         perms.put("permissions", permissions);
@@ -428,14 +617,14 @@ protected:
         database->databaseClient().service()->createRequest(request);
 
         MojErr err = request->send(put_permissions_slot, "com.palm.db", "putPermissions", perms);
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr PutPermissionsResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -552,14 +741,32 @@ void MojoMediaDatabase::executeNextCommand()
     currentCommand = commandQueue.front();
     commandQueue.pop_front();
 
+    restart_timeout = 0;
+
     try {
         currentCommand->execute();
     }
     catch(std::runtime_error& err) {
-        printf("%s: Got error %s\n", __PRETTY_FUNCTION__, err.what());
+        // Without a request sent, no reply will come to finish it
+        fail(std::string(currentCommand->name()) + ": " + err.what());
     }
+}
 
-    restart_timeout = 0;
+void MojoMediaDatabase::fail(const std::string &message)
+{
+    g_warning("%s: %s", currentCommand ? currentCommand->name().c_str() : "(no command)", message.c_str());
+    finish();
+}
+
+void MojoMediaDatabase::enqueueFront(BaseCommand *command)
+{
+    command->retain();
+    commandQueue.push_front(command);
+}
+
+void MojoMediaDatabase::reconcile(std::function<bool(const std::string&)> stillIndexed)
+{
+    enqueue(new ReconcileCommand(this, stillIndexed));
 }
 
 void MojoMediaDatabase::insert(const MediaFile &file)

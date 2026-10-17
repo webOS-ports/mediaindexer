@@ -26,7 +26,7 @@ protected:
 
     MojErr QueryImagesResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -56,7 +56,7 @@ protected:
 
     MojErr AlbumUpdateResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         database->finish();
 
@@ -141,11 +141,11 @@ protected:
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         // if we already have an album with the same path we can use it
         if (results.size() > 0)
@@ -181,14 +181,14 @@ protected:
         objectsToInsert.push(albumObj);
 
         err = database->databaseClient().put(insert_album_slot, objectsToInsert.begin(), objectsToInsert.end());
-        ErrorToException(err);
+        FailOnError(err);
 
         return MojErrNone;
     }
 
     MojErr InsertAlbumResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
 
         return updateImage(response);
     }
@@ -197,7 +197,7 @@ protected:
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
-        ErrorToException(err);
+        FailOnError(err);
 
         MojObject item;
         if(!results.at(0, item)) {
@@ -210,7 +210,7 @@ protected:
         err = item.getRequired("id", albumId);
         if (err != MojErrNone) {
             err = item.getRequired("_id", albumId);
-            ErrorToException(err);
+            FailOnError(err);
         }
 
         database->enqueue(new AssignImageToAlbumCommand(database, idToUpdate, albumId), false);
@@ -297,7 +297,7 @@ protected:
 
     MojErr UpdateImageResponse(MojObject &response, MojErr responseErr)
     {
-        ResponseToException(response, responseErr);
+        FailOnResponseError(response, responseErr);
         database->finish();
         return MojErrNone;
     }

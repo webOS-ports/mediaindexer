@@ -20,6 +20,8 @@
 #include <db/MojDbServiceClient.h>
 #include "db/MojDb.h"
 #include <deque>
+#include <functional>
+#include <string>
 
 namespace mediascanner
 {
@@ -42,6 +44,12 @@ public:
     void finish();
 
     void enqueue(BaseCommand *command, bool restart = true);
+    // Next in line, ahead of what is queued: for a command that goes on in steps
+    void enqueueFront(BaseCommand *command);
+    // Logs why the current command failed, and finishes it
+    void fail(const std::string &message);
+    // Removes the entries of files for which stillIndexed(path) is false
+    void reconcile(std::function<bool(const std::string&)> stillIndexed);
 
 private:
     void checkRestarting();
