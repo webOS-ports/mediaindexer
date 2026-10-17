@@ -1,10 +1,19 @@
 Unsorted, unpriorized, incomplete list of things we have to be done:
 
 - Album management
-    - count images per album
-    - delete albums when no image is part of it anymore
-    - create preview thumbnail for the album
+    - delete albums when no image is part of it anymore (audio albums,
+      genres and artists too: their totals go to 0, the entries stay)
+    - create preview thumbnail for the album (GenerateAlbumThumbnailsCommand
+      does nothing yet)
 
 - Image management
-    - create thumbnails for each image
-    - extract exif information from images
+    - extract exif information from images (createdTime is when the file was
+      first found, not when the picture was taken)
+
+- Service
+    - run as a user of its own rather than root: it parses every file in
+      /media/internal with TagLib and Qt
+    - handle IN_Q_OVERFLOW (the kernel's event queue ran over) with a rescan;
+      until then changes in such a burst are only picked up at the next start
+    - delete the thumbnails of images that are removed (only those removed
+      while their thumbnail was being made go now)
