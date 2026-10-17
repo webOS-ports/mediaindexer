@@ -3,7 +3,3 @@ Unsorted, unpriorized, incomplete list of things we have to be done:
 - Album management
     - create preview thumbnail for the album (GenerateAlbumThumbnailsCommand
       does nothing yet)
-
-- Service
-    - run as a user of its own rather than root: it parses every file in
-      /media/internal with TagLib and Qt

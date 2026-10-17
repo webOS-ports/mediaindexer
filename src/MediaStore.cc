@@ -100,7 +100,9 @@ CREATE TABLE files (
     version.step();
 }
 
-#define LUNA_DATA_DIR   "/var/luna/data"
+// The indexer's own folder: it runs as "media", which may write only there
+// (and to the thumbnails), see files/systemd/mediaindexer.service
+#define LUNA_DATA_DIR   "/var/luna/data/mediaindexer"
 
 static sqlite3 *openFileList(const char *path)
 {

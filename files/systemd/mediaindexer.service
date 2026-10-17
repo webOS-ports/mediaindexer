@@ -6,6 +6,18 @@ RequiresMountsFor=/media/internal
 
 [Service]
 Type=simple
+# Not root: every file in /media/internal is parsed with TagLib and Qt.
+# CAP_DAC_READ_SEARCH lets it read and watch every file there, whoever owns
+# it; it can write only what "media" owns: its file list and the thumbnails.
+User=media
+Group=media
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+# As root ("+"): its folder, taking along the file list from when it ran as
+# root, and the thumbnail folder, made its own. A link or a file in place of
+# .thumbnails is removed rather than followed.
+ExecStartPre=+/bin/sh -c 'd=/var/luna/data/mediaindexer; mkdir -p $d && if [ -f /var/luna/data/filenotify.db3 ] && [ ! -e $d/filenotify.db3 ]; then mv /var/luna/data/filenotify.db3* $d/; fi && chown -hR media:media $d && t=/media/internal/.thumbnails; if [ -L $t ] || { [ -e $t ] && [ ! -d $t ]; }; then rm -f $t; fi; mkdir -p $t && chown -h media:media $t && chmod 0755 $t'
 ExecStart=/usr/sbin/mediaindexer
 Restart=always
 
