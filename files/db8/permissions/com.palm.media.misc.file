@@ -30,5 +30,13 @@
             "extend": "allow",
             "delete": "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.misc.file:1",
+        "caller"    : "org.webosports.app.documents",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]
