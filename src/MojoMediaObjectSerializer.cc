@@ -54,7 +54,7 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         std::string strDiscPos = std::to_string((file.discPosition()*100000)+file.trackPosition());
 
         MojObject sortKeyObj(MojObject::Type::TypeObject);
-        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.artist()+"\t\t"+strDiscPos).c_str());
+        sortKeyObj.putString("albumArtistDiscAndTrack", (file.album()+"\t\t"+file.albumArtist()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("albumDiscAndTrack", (file.album()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("artistAlbumDiscAndTrack", (file.artist()+"\t\t"+file.album()+"\t\t"+strDiscPos).c_str());
         sortKeyObj.putString("trackAndDisc", strDiscPos.c_str());
