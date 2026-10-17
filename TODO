@@ -11,5 +11,3 @@ Unsorted, unpriorized, incomplete list of things we have to be done:
 - Service
     - run as a user of its own rather than root: it parses every file in
       /media/internal with TagLib and Qt
-    - handle IN_Q_OVERFLOW (the kernel's event queue ran over) with a rescan;
-      until then changes in such a burst are only picked up at the next start

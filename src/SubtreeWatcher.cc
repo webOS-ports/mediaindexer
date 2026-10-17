@@ -34,6 +34,7 @@
 #include<cerrno>
 #include<string>
 #include<map>
+#include<vector>
 #include<memory>
 
 #include <glib.h>
@@ -52,6 +53,8 @@ struct SubtreeWatcherPrivate {
     std::map<std::string, int> str2wd;
     bool keep_going;
     std::set<std::string> ignoredDirectories;
+    // The folder this watcher was set up for
+    std::string root;
 
     std::unique_ptr<GSource,void(*)(GSource*)> source;
 
@@ -105,23 +108,33 @@ void SubtreeWatcher::addDir(const string &root) {
         return;
     }
 
+    if (p->root.empty())
+        p->root = root;
     if(p->str2wd.find(root) != p->str2wd.end())
+        return;
+    watchTree(root);
+}
+
+void SubtreeWatcher::watchTree(const string &root) {
+    if (isInIgnoredDirectory(root, p->ignoredDirectories))
         return;
     unique_ptr<DIR, int(*)(DIR*)> dir(opendir(root.c_str()), closedir);
     if(!dir) {
         return;
     }
-    int wd = inotify_add_watch(p->inotifyid, root.c_str(),
-            IN_CREATE | IN_DELETE_SELF | IN_DELETE | IN_CLOSE_WRITE |
-            IN_MOVED_FROM | IN_MOVED_TO | IN_ONLYDIR);
-    if(wd == -1) {
-        fprintf(stderr, "Could not create inotify watch object: %s\n", strerror(errno));
-        return; // Probably ran out of watches, keep monitoring what we can.
+    if (p->str2wd.find(root) == p->str2wd.end()) {
+        int wd = inotify_add_watch(p->inotifyid, root.c_str(),
+                IN_CREATE | IN_DELETE_SELF | IN_DELETE | IN_CLOSE_WRITE |
+                IN_MOVED_FROM | IN_MOVED_TO | IN_ONLYDIR);
+        if(wd == -1) {
+            fprintf(stderr, "Could not create inotify watch object: %s\n", strerror(errno));
+            return; // Probably ran out of watches, keep monitoring what we can.
+        }
+        p->wd2str[wd] = root;
+        p->str2wd[root] = wd;
+        printf("Watching subdirectory %s, %ld watches in total.\n", root.c_str(),
+                (long)p->wd2str.size());
     }
-    p->wd2str[wd] = root;
-    p->str2wd[root] = wd;
-    printf("Watching subdirectory %s, %ld watches in total.\n", root.c_str(),
-            (long)p->wd2str.size());
     unique_ptr<struct dirent, void(*)(void*)> entry((dirent*)malloc(sizeof(dirent) + NAME_MAX),
                     free);
     struct dirent *de;
@@ -134,8 +147,56 @@ void SubtreeWatcher::addDir(const string &root) {
         if (lstat(fullpath.c_str(), &statbuf) != 0)
             continue;
         if(S_ISDIR(statbuf.st_mode)) {
-            addDir(fullpath);
+            watchTree(fullpath);
         }
+    }
+}
+
+void SubtreeWatcher::rescan() {
+    if (p->root.empty())
+        return;
+    g_warning("Changes were missed (inotify queue overflow): reading %s again", p->root.c_str());
+
+    // Folders deleted or moved away meanwhile: their watches and entries go
+    vector<string> gone;
+    for (const auto &w : p->str2wd) {
+        struct stat st;
+        if (lstat(w.first.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+            gone.push_back(w.first);
+    }
+    for (const auto &dir : gone)
+        dirRemoved(dir);
+
+    struct stat st;
+    if (lstat(p->root.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+        return;
+
+    // Folders that appeared get watches; files are read as at start
+    watchTree(p->root);
+    Scanner s;
+    vector<DetectedFile> files = s.scanFiles(&p->extractor, p->root, AllMedia, p->ignoredDirectories);
+    set<string> found;
+    for (const auto &d : files) {
+        found.insert(d.path);
+        try {
+            if (d.etag == p->store.getETag(d.path))
+                continue;
+            p->store.insert(p->extractor.extract(d));
+        } catch (const exception &e) {
+            fprintf(stderr, "Error when adding new file: %s\n", e.what());
+        }
+    }
+
+    // Not when the scan found nothing: the folder may be unmounted
+    if (files.empty())
+        return;
+    try {
+        for (const auto &path : p->store.filesBelowPath(p->root)) {
+            if (found.find(path) == found.end())
+                p->store.remove(path);
+        }
+    } catch (const exception &e) {
+        fprintf(stderr, "Error when removing files no longer there: %s\n", e.what());
     }
 }
 
@@ -223,8 +284,16 @@ void SubtreeWatcher::processEvents() {
         printf("Read error.\n");
         return;
     }
+    bool overflowed = false;
     for(char *d = buf; d < buf + num_read;) {
         struct inotify_event *event = (struct inotify_event *) d;
+        // More happened than the kernel could queue: what is lost is only
+        // known by looking again
+        if (event->mask & IN_Q_OVERFLOW) {
+            overflowed = true;
+            d += sizeof(struct inotify_event) + event->len;
+            continue;
+        }
         if (p->wd2str.find(event->wd) == p->wd2str.end()) {
             // Ignore events for unknown watches.  We may receive
             // such events when a directory is removed.
@@ -275,6 +344,8 @@ void SubtreeWatcher::processEvents() {
         }
         d += sizeof(struct inotify_event) + event->len;
     }
+    if (overflowed)
+        rescan();
 }
 
 int SubtreeWatcher::getFd() const {

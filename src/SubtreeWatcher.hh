@@ -40,6 +40,10 @@ private:
     void dirRemoved(const std::string &abspath);
 
     bool removeDir(const std::string &abspath);
+    // Watches dir and every folder below it not watched yet
+    void watchTree(const std::string &dir);
+    // Reads the whole tree again, after events were lost
+    void rescan();
 
 public:
     SubtreeWatcher(MediaStore &store, MetadataExtractor &extractor, const std::set<std::string>& ignoredDirectories);
