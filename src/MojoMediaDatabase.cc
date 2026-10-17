@@ -349,12 +349,15 @@ public:
     }
 
 protected:
-    // What apps keep in an entry (a bookmark, a play position, thumbnails)
-    // and when the file was first found: a file written again leaves them
-    // as they are. A field the entry does not have yet is filled in.
+    // What apps keep in an entry (a bookmark, a play position, thumbnails),
+    // when the file was first found, and the image album it was put in (the
+    // path, and so the album, is the same; written as "" until the album is
+    // looked up again, its album would count no images and be deleted): a
+    // file written again leaves them as they are. A field the entry does not
+    // have yet is filled in.
     static constexpr const char* keptFields[] = {
         "bookmark", "playbackPosition", "lastPlayTime", "thumbnails", "serviced",
-        "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime"
+        "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime", "albumId"
     };
 
     MojDbClient::Signal::Slot<InsertCommand> find_existing_slot;
