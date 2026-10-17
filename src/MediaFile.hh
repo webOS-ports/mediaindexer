@@ -41,6 +41,8 @@ public:
     std::string path() const noexcept { return _path; }
     std::list<std::string> sortKey() const noexcept { return _sortKey; }
     uint64_t createdTime() const noexcept { return _createdTime; }
+    // createdTime is what the file says (an image's EXIF), not when it was found
+    bool createdTimeFromFile() const noexcept { return _createdTimeFromFile; }
     uint64_t modifiedTime() const noexcept { return _modifiedTime; }
     std::string searchKey() const noexcept { return _searchKey; }
     std::string name() const noexcept { return _name; }
@@ -80,6 +82,7 @@ public:
     void setPath(const std::string& value) { _path = value; }
     void setSortKey(const std::list<std::string> value) { _sortKey = value; }
     void setCreatedTime(uint64_t value) { _createdTime = value; }
+    void setCreatedTimeFromFile(bool value) { _createdTimeFromFile = value; }
     void setModifiedTime(uint64_t value) { _modifiedTime = value; }
     void setSearchKey(const std::string& value) { _searchKey = value; }
     void setName(const std::string& value) { _name = value; }
@@ -122,6 +125,7 @@ private:
     uint64_t _size;
     std::list<std::string> _sortKey;
     uint64_t _createdTime;
+    bool _createdTimeFromFile = false;
     uint64_t _modifiedTime;
     std::string _searchKey;
     std::string _extension;

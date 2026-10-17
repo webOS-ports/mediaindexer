@@ -32,6 +32,8 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <ctime>
+#include <vector>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -214,14 +216,213 @@ std::string MetadataExtractor::getAlbumNameFromPath(const std::string& path)
     return path.substr(path.find_last_of("/") + 1, path.size() - 1);
 }
 
-void MetadataExtractor::extractForImage(MediaFile &mf, const DetectedFile &d)
+namespace {
+
+// A TIFF structure, as EXIF is one: byte order from its header, every read
+// checked against its size. The data is whatever is in /media/internal.
+struct Tiff {
+    const unsigned char *data;
+    size_t size;
+    bool little;
+
+    bool u16(size_t off, unsigned &v) const
+    {
+        if (off > size || size - off < 2)
+            return false;
+        v = little ? (data[off] | data[off + 1] << 8) : (data[off] << 8 | data[off + 1]);
+        return true;
+    }
+
+    bool u32(size_t off, uint32_t &v) const
+    {
+        if (off > size || size - off < 4)
+            return false;
+        const unsigned char *b = data + off;
+        v = little ? ((uint32_t) b[0] | (uint32_t) b[1] << 8 | (uint32_t) b[2] << 16 | (uint32_t) b[3] << 24)
+                   : ((uint32_t) b[0] << 24 | (uint32_t) b[1] << 16 | (uint32_t) b[2] << 8 | (uint32_t) b[3]);
+        return true;
+    }
+
+    // The offset of the tag's 12 byte entry in the IFD at ifd
+    bool find(size_t ifd, unsigned tag, size_t &entry) const
+    {
+        unsigned count;
+        if (!u16(ifd, count))
+            return false;
+        for (unsigned i = 0; i < count; i++) {
+            size_t e = ifd + 2 + 12 * (size_t) i;
+            if (e > size || size - e < 12)
+                return false;
+            unsigned t;
+            u16(e, t);
+            if (t == tag) {
+                entry = e;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // An ASCII entry's text, up to its first NUL
+    bool ascii(size_t entry, std::string &out) const
+    {
+        unsigned type;
+        uint32_t count;
+        if (!u16(entry + 2, type) || !u32(entry + 4, count) || type != 2 || count == 0 || count > 64)
+            return false;
+        size_t off = entry + 8;
+        if (count > 4) {
+            uint32_t at;
+            if (!u32(entry + 8, at))
+                return false;
+            off = at;
+        }
+        if (off > size || size - off < count)
+            return false;
+        const char *s = (const char *) data + off;
+        out.assign(s, strnlen(s, count));
+        return true;
+    }
+
+    // An IFD offset (LONG or IFD type, one of it)
+    bool pointer(size_t entry, uint32_t &out) const
+    {
+        unsigned type;
+        uint32_t count;
+        return u16(entry + 2, type) && (type == 4 || type == 13) && u32(entry + 4, count) && count == 1 &&
+               u32(entry + 8, out);
+    }
+};
+
+bool digits(const std::string &s, size_t at, size_t n, int &out)
+{
+    out = 0;
+    for (size_t i = at; i < at + n; i++) {
+        if (s[i] < '0' || s[i] > '9')
+            return false;
+        out = out * 10 + (s[i] - '0');
+    }
+    return true;
+}
+
+// "YYYY:MM:DD HH:MM:SS", in the camera's local time; with an offset
+// ("+02:00") that time is placed exactly, without one it is taken as the
+// device's local time
+bool parseExifDate(const std::string &date, const std::string &offset, uint64_t &out)
+{
+    if (date.size() != 19 || date[4] != ':' || date[7] != ':' || date[10] != ' ' || date[13] != ':' || date[16] != ':')
+        return false;
+    int year, month, day, hour, minute, second;
+    if (!digits(date, 0, 4, year) || !digits(date, 5, 2, month) || !digits(date, 8, 2, day) ||
+        !digits(date, 11, 2, hour) || !digits(date, 14, 2, minute) || !digits(date, 17, 2, second))
+        return false;
+    if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 60)
+        return false;
+
+    struct tm tm = {};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = second;
+
+    time_t t;
+    int offHours, offMinutes;
+    if (offset.size() == 6 && (offset[0] == '+' || offset[0] == '-') && offset[3] == ':' &&
+        digits(offset, 1, 2, offHours) && digits(offset, 4, 2, offMinutes) && offHours <= 14 && offMinutes <= 59) {
+        t = timegm(&tm) - (offset[0] == '-' ? -1 : 1) * (offHours * 3600 + offMinutes * 60);
+    } else {
+        tm.tm_isdst = -1;
+        t = mktime(&tm);
+    }
+    if (t < 0)
+        return false;
+    out = (uint64_t) t;
+    return true;
+}
+
+bool tiffCaptureTime(const unsigned char *data, size_t size, uint64_t &out)
+{
+    if (size < 8)
+        return false;
+    Tiff tiff{data, size, false};
+    if (data[0] == 'I' && data[1] == 'I')
+        tiff.little = true;
+    else if (!(data[0] == 'M' && data[1] == 'M'))
+        return false;
+    unsigned magic;
+    uint32_t ifd0;
+    if (!tiff.u16(2, magic) || magic != 42 || !tiff.u32(4, ifd0))
+        return false;
+
+    // DateTimeOriginal and OffsetTimeOriginal in the Exif IFD; failing that,
+    // DateTime in IFD0. No IFD chains are followed.
+    std::string date, offset;
+    size_t entry;
+    uint32_t exifIfd;
+    if (tiff.find(ifd0, 0x8769, entry) && tiff.pointer(entry, exifIfd)) {
+        if (tiff.find(exifIfd, 0x9003, entry))
+            tiff.ascii(entry, date);
+        if (tiff.find(exifIfd, 0x9011, entry))
+            tiff.ascii(entry, offset);
+    }
+    if (date.empty() && tiff.find(ifd0, 0x0132, entry))
+        tiff.ascii(entry, date);
+    return parseExifDate(date, offset, out);
+}
+
+} // namespace
+
+bool MetadataExtractor::captureTimeFromExif(const unsigned char *data, size_t size, uint64_t &out)
+{
+    if (size >= 2 && ((data[0] == 'I' && data[1] == 'I') || (data[0] == 'M' && data[1] == 'M')))
+        return tiffCaptureTime(data, size, out);
+
+    // A JPEG: segments up to the image data, the EXIF one is an APP1
+    // starting "Exif\0\0"
+    if (size < 4 || data[0] != 0xFF || data[1] != 0xD8)
+        return false;
+    size_t p = 2;
+    while (p + 4 <= size) {
+        if (data[p] != 0xFF)
+            return false;
+        unsigned marker = data[p + 1];
+        if (marker == 0xFF) {
+            p++;
+            continue;
+        }
+        if (marker == 0xD9 || marker == 0xDA)
+            return false;
+        if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+            p += 2;
+            continue;
+        }
+        size_t length = (size_t) data[p + 2] << 8 | data[p + 3];
+        if (length < 2 || length > size - p - 2)
+            return false;
+        if (marker == 0xE1 && length >= 8 && memcmp(data + p + 4, "Exif\0\0", 6) == 0)
+            return tiffCaptureTime(data + p + 10, length - 8, out);
+        p += 2 + length;
+    }
+    return false;
+}
+
+void MetadataExtractor::extractForImage(MediaFile &mf, int fd)
 {
     mf.setMediaType("image");
     mf.setAlbumPath(getAlbumPathFromImage(mf.path()));
     mf.setAlbum(getAlbumNameFromPath(mf.albumPath()));
 
-    // FIXME once we have exif detection override createdTime here with the correct value
-    // mf.setCreatedTime(0);
+    // When the picture was taken, if it says. EXIF comes before the image
+    // data, and is at most 64 KiB.
+    std::vector<unsigned char> head(128 * 1024);
+    ssize_t n = pread(fd, head.data(), head.size(), 0);
+    uint64_t taken;
+    if (n > 0 && captureTimeFromExif(head.data(), (size_t) n, taken)) {
+        mf.setCreatedTime(taken);
+        mf.setCreatedTimeFromFile(true);
+    }
 }
 
 MediaFile MetadataExtractor::extract(const DetectedFile &d)
@@ -259,7 +460,7 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
     if (d.type == AudioMedia)
         extractForAudio(mf, fd);
     else if (d.type == ImageMedia)
-        extractForImage(mf, d);
+        extractForImage(mf, fd);
 
     mf.rebuildSearchKey();
 

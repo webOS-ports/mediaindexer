@@ -20,6 +20,8 @@
 #ifndef METADATAEXTRACTOR_H
 #define METADATAEXTRACTOR_H
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include "ScannerCore.hh"
 
@@ -53,7 +55,11 @@ public:
     MediaFile extract(const DetectedFile &media);
     // Reads the tags through fd, the file's descriptor
     void extractForAudio(MediaFile &mf, int fd);
-    void extractForImage(MediaFile &mf, const DetectedFile &d);
+    void extractForImage(MediaFile &mf, int fd);
+
+    // When a picture was taken, from the EXIF in the start of a JPEG or a
+    // TIFF file, as seconds since the epoch
+    static bool captureTimeFromExif(const unsigned char *data, size_t size, uint64_t &out);
 
     std::string getAlbumPathFromImage(const std::string& path);
     std::string getAlbumNameFromPath(const std::string& path);

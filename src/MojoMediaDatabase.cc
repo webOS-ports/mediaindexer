@@ -378,6 +378,9 @@ protected:
             for (const char* field : keptFields) {
                 if (!existing.contains(field))
                     continue;
+                // Unless the file itself says when it was made
+                if (strcmp(field, "createdTime") == 0 && file.createdTimeFromFile())
+                    continue;
                 bool deleted = false;
                 err = mediaObj.del(field, deleted);
                 FailOnError(err);
