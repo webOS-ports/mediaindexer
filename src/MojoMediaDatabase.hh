@@ -55,6 +55,11 @@ public:
     // Removes the entries of files for which stillIndexed(path) is false
     void reconcile(std::function<bool(const std::string&)> stillIndexed);
 
+    // The command waiting for db8, if any
+    std::string currentCommandName() const;
+
+    static const int CommandTimeoutSeconds;
+
 private:
     void checkRestarting();
     void executeNextCommand();
@@ -62,6 +67,7 @@ private:
 
     static gboolean restartQueue(gpointer user_data);
     static gboolean checkQueue(gpointer user_data);
+    static gboolean commandTimedOut(gpointer user_data);
 
 private:
     MojDbClient& dbclient;
@@ -69,6 +75,7 @@ private:
     BaseCommand *currentCommand;
     BaseCommand *previousCommand;
     int restart_timeout;
+    guint command_timeout;
 
     friend class BaseCommand;
 };

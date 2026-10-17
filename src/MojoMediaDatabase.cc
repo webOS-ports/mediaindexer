@@ -37,9 +37,15 @@
 #ifndef DB_PERMISSION_DIRECTORY
 #define DB_PERMISSION_DIRECTORY "/etc/palm/db/permissions/"
 #endif
+// How long a command waits for db8 to reply
+#ifndef COMMAND_TIMEOUT_SECONDS
+#define COMMAND_TIMEOUT_SECONDS 30
+#endif
 
 namespace mediascanner
 {
+
+const int MojoMediaDatabase::CommandTimeoutSeconds = COMMAND_TIMEOUT_SECONDS;
 
 void CheckErr(MojErr err, const char* filename, int line)
 {
@@ -91,31 +97,89 @@ std::string DescribeErr(MojObject& response, MojErr err, const char* filename, i
         } \
     } while(0)
 
+// Also what every reply handler starts with: a command given up on does
+// nothing more with a reply that comes late, as what it would act on is old
+#define IgnoreIfAbandoned() \
+    do { \
+        if (abandoned()) \
+            return MojErrNone; \
+    } while(0)
+
 #define FailOnResponseError(response, err) \
     do { \
+        IgnoreIfAbandoned(); \
         if(err) { \
             database->fail(DescribeErr(response, err, __FILE__, __LINE__)); \
             return MojErrNone; \
         } \
     } while(0)
 
+// What a command sees of the queue. A command given up on, as no reply
+// came in time, may still get its reply later: that must not finish or fail
+// whichever command runs by then.
+class CommandQueue
+{
+public:
+    CommandQueue(MojoMediaDatabase *database, const BaseCommand *owner) :
+        database(database),
+        owner(owner)
+    {
+    }
+
+    CommandQueue *operator->() { return this; }
+    operator MojoMediaDatabase*() const { return database; }
+
+    void finish();
+    void fail(const std::string &message);
+    void enqueue(BaseCommand *command, bool restart = true) { database->enqueue(command, restart); }
+    void enqueueFront(BaseCommand *command) { database->enqueueFront(command); }
+    MojDbClient& databaseClient() const { return database->databaseClient(); }
+
+private:
+    MojoMediaDatabase *database;
+    const BaseCommand *owner;
+};
+
 class BaseCommand : public MojSignalHandler
 {
 public:
     BaseCommand(const std::string& name, MojoMediaDatabase *database) :
-        database(database),
+        database(database, this),
         _name(name)
     {
     }
 
     virtual void execute() = 0;
 
+    // The same command, to send again when no reply came; none by default
+    virtual BaseCommand *again() const { return nullptr; }
+
     std::string name() const { return _name; }
 
+    void abandon() { _abandoned = true; }
+    bool abandoned() const { return _abandoned; }
+
 protected:
-    MojoMediaDatabase *database;
+    CommandQueue database;
     std::string _name;
+
+private:
+    bool _abandoned = false;
 };
+
+void CommandQueue::finish()
+{
+    if (!owner->abandoned())
+        database->finish();
+}
+
+void CommandQueue::fail(const std::string &message)
+{
+    if (owner->abandoned())
+        g_message("%s: after it was given up on: %s", owner->name().c_str(), message.c_str());
+    else
+        database->fail(message);
+}
 
 // A find answers with at most 500 results, so totals counted from the
 // results stopped at 500. Asked for a count, db8 counts every match; one
@@ -193,8 +257,10 @@ static void enqueueRecounts(MojoMediaDatabase *database, const MojObject &entry)
                                                                 artist, MojObject()), false);
     }
     else if (strncmp(kind.data(), "com.palm.media.image.file:", strlen("com.palm.media.image.file:")) == 0) {
+        // "" until the image was assigned to its album
         MojObject albumId;
-        if (entry.get("albumId", albumId) && albumId.type() != MojObject::TypeNull)
+        MojString albumIdStr;
+        if (entry.get("albumId", albumId) && albumId.stringValue(albumIdStr) == MojErrNone && !albumIdStr.empty())
             database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
     }
 }
@@ -210,6 +276,15 @@ public:
         file(file),
         stored(stored)
     {
+    }
+
+    BaseCommand *again() const
+    {
+        if (retried)
+            return nullptr;
+        InsertCommand *command = new InsertCommand(database, file, stored);
+        command->retried = true;
+        return command;
     }
 
     void execute()
@@ -363,6 +438,7 @@ private:
     MediaFile file;
     std::function<void()> stored;
     MojObject existing;
+    bool retried = false;
 };
 
 /*
@@ -501,6 +577,15 @@ public:
     {
     }
 
+    BaseCommand *again() const
+    {
+        if (retried)
+            return nullptr;
+        RemoveCommand *command = new RemoveCommand(database, filename);
+        command->retried = true;
+        return command;
+    }
+
     void execute()
     {
         MojDbQuery query;
@@ -577,6 +662,7 @@ protected:
 private:
     std::string filename;
     MojObject::ObjectVec removedEntries;
+    bool retried = false;
 };
 
 class RemoveAllCommand : public BaseCommand
@@ -607,6 +693,8 @@ protected:
 
     MojErr RemoveResponse(MojObject &, MojErr responseErr)
     {
+        IgnoreIfAbandoned();
+
         // Not an error on a first start, when the kinds are not there yet
         if (responseErr != MojErrNone)
             g_message("RemoveAll: nothing removed (err %d)", (int) responseErr);
@@ -742,6 +830,8 @@ protected:
 
     MojErr RemoveResponse(MojObject &response, MojErr responseErr)
     {
+        IgnoreIfAbandoned();
+
         database->finish();
 
         return MojErrNone;
@@ -755,7 +845,8 @@ MojoMediaDatabase::MojoMediaDatabase(MojDbClient& dbclient) :
     dbclient(dbclient),
     currentCommand(0),
     previousCommand(0),
-    restart_timeout(0)
+    restart_timeout(0),
+    command_timeout(0)
 {
 }
 
@@ -782,6 +873,13 @@ gboolean MojoMediaDatabase::checkQueue(gpointer user_data)
 
 void MojoMediaDatabase::finish()
 {
+    if (command_timeout) {
+        g_source_remove(command_timeout);
+        command_timeout = 0;
+    }
+
+    if (previousCommand)
+        previousCommand->release();
     previousCommand = currentCommand;
     currentCommand = 0;
 
@@ -834,12 +932,48 @@ void MojoMediaDatabase::executeNextCommand()
         // Without a request sent, no reply will come to finish it
         fail(std::string(currentCommand->name()) + ": " + err.what());
     }
+
+    // A request whose reply never comes (db8 restarted while it was out)
+    // would hold up every command after it
+    if (currentCommand && !command_timeout)
+        command_timeout = g_timeout_add_seconds(CommandTimeoutSeconds, &MojoMediaDatabase::commandTimedOut, this);
+}
+
+gboolean MojoMediaDatabase::commandTimedOut(gpointer user_data)
+{
+    MojoMediaDatabase *database = static_cast<MojoMediaDatabase*>(user_data);
+    database->command_timeout = 0;
+
+    BaseCommand *command = database->currentCommand;
+    if (!command)
+        return FALSE;
+
+    BaseCommand *retry = command->again();
+    g_warning("%s: no reply from db8 in %d s; going on%s", command->name().c_str(), CommandTimeoutSeconds,
+              retry ? ", and trying it again later" : "");
+    command->abandon();
+    database->finish();
+    if (retry)
+        database->enqueue(retry);
+    return FALSE;
+}
+
+std::string MojoMediaDatabase::currentCommandName() const
+{
+    return currentCommand ? currentCommand->name() : "";
 }
 
 void MojoMediaDatabase::fail(const std::string &message)
 {
-    g_warning("%s: %s", currentCommand ? currentCommand->name().c_str() : "(no command)", message.c_str());
+    // An insert or removal is tried once more, from the back of the queue:
+    // a reply fails when db8 restarts ("Message not processed"), and by then
+    // it is back
+    BaseCommand *retry = currentCommand ? currentCommand->again() : nullptr;
+    g_warning("%s: %s%s", currentCommand ? currentCommand->name().c_str() : "(no command)", message.c_str(),
+              retry ? "; trying it again later" : "");
     finish();
+    if (retry)
+        enqueue(retry);
 }
 
 void MojoMediaDatabase::enqueueFront(BaseCommand *command)

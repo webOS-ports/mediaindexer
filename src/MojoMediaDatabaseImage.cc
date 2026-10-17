@@ -83,6 +83,8 @@ protected:
 
     MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
     {
+        IgnoreIfAbandoned();
+
         database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
 
         database->finish();
@@ -255,7 +257,7 @@ public:
         // where the image has transparency, JPEG otherwise
         const char *format = thumbnailImage.hasAlphaChannel() ? "png" : "jpg";
         gchar *digest = g_compute_checksum_for_string(G_CHECKSUM_MD5, imagePath.c_str(), imagePath.length());
-        std::string fileName = std::string(digest) + "." + format;
+        fileName = std::string(digest) + "." + format;
         g_free(digest);
         std::string thumbnailPath = std::string(THUMBNAIL_DIR) + "/" + fileName;
 
@@ -306,6 +308,20 @@ protected:
 
     MojErr UpdateImageResponse(MojObject &response, MojErr responseErr)
     {
+        IgnoreIfAbandoned();
+
+        // The image's entry went (the file was removed) while this waited in
+        // the queue: so does its thumbnail
+        if (responseErr == MojErrDbKindNotSpecified) {
+            int dirFd = openOwnDirectory(THUMBNAIL_DIR);
+            if (dirFd >= 0) {
+                unlinkat(dirFd, fileName.c_str(), 0);
+                close(dirFd);
+            }
+            database->finish();
+            return MojErrNone;
+        }
+
         FailOnResponseError(response, responseErr);
         database->finish();
         return MojErrNone;
@@ -314,4 +330,5 @@ protected:
 private:
     MojObject imageId;
     std::string imagePath;
+    std::string fileName;
 };
