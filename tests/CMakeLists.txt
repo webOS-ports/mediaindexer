@@ -8,3 +8,10 @@ add_executable(mediaindexer-tests
 target_include_directories(mediaindexer-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 add_test(NAME mediaindexer-unit COMMAND mediaindexer-tests)
+
+add_executable(mediaindexer-owned-tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/OwnedEntriesTest.cc
+    ${PROJECT_SOURCE_DIR}/src/OwnedEntries.cc)
+target_include_directories(mediaindexer-owned-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+add_test(NAME mediaindexer-owned COMMAND mediaindexer-owned-tests)

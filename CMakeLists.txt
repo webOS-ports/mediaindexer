@@ -64,6 +64,7 @@ file(GLOB SOURCES
     src/MediaScannerServiceApp.cc
     src/MojoMediaDatabase.cc
     src/MojoMediaObjectSerializer.cc
+    src/OwnedEntries.cc
     src/PermissionGrants.cc
     src/PermissionRules.cc
     src/SubtreeWatcher.cc

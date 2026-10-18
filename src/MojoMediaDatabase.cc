@@ -30,6 +30,7 @@
 #include "MojoMediaObjectSerializer.hh"
 #include "internal/utils.hh"
 #include "MediaFile.hh"
+#include "OwnedEntries.hh"
 
 #ifndef DB_KIND_DIRECTORY
 #define DB_KIND_DIRECTORY "/etc/palm/db/kinds/"
@@ -254,6 +255,18 @@ private:
 
 #include "MojoMediaDatabaseImage.cc"
 #include "MojoMediaDatabaseAudio.cc"
+
+// An entry of an account, which another service keeps: see OwnedEntries.hh.
+// Queries for it select "accountId".
+static bool isAccountEntry(const MojObject &entry)
+{
+    MojObject accountId;
+    MojString accountIdStr;
+    if (!entry.get("accountId", accountId) || accountId.type() != MojObject::TypeString ||
+        accountId.stringValue(accountIdStr) != MojErrNone)
+        return false;
+    return ownedentries::isAccountEntry(std::string(accountIdStr.data()));
+}
 
 // What a file's entry is selected with, so that what it belonged to can be
 // counted again once it is gone or changed
@@ -510,6 +523,7 @@ public:
         MojDbQuery query;
         query.select("_id");
         query.select("path");
+        query.select("accountId");
         selectCollections(query);
         query.from("com.palm.media.file:1");
         query.limit(PageSize);
@@ -538,6 +552,10 @@ protected:
         for (MojSize n = 0; n < results.size(); n++) {
             MojObject item;
             if (!results.at(n, item))
+                continue;
+
+            // A synced cloud photo: its file is in a hidden folder on purpose
+            if (isAccountEntry(item))
                 continue;
 
             MojString pathStr;
@@ -632,6 +650,7 @@ public:
         query.select("_id");
         query.select("name");
         query.select("artist");
+        query.select("accountId");
         query.from(Kinds[kind]);
         query.limit(PageSize);
         if (havePage)
@@ -670,7 +689,7 @@ protected:
                 database->enqueue(new CountGenreAudiosCommand(database, id, name), false);
             else if (kind == 2)
                 database->enqueue(new CountArtistAudiosCommand(database, id, name), false);
-            else
+            else if (!isAccountEntry(*it))      // a cloud album is counted by its service
                 database->enqueue(new CountAlbumImagesCommand(database, id), false);
         }
 
