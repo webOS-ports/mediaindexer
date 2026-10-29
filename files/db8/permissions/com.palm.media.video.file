@@ -54,5 +54,13 @@
         "operations": {
             "read"  : "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.video.file:1",
+        "caller"    : "org.webosports.app.photos",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]

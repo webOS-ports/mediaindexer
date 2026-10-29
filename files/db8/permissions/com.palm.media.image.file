@@ -34,5 +34,13 @@
             "extend": "allow",
             "delete": "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.image.file:1",
+        "caller"    : "org.webosports.app.photos",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]
