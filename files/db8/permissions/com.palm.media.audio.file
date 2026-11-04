@@ -62,5 +62,13 @@
         "operations": {
             "read"  : "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.audio.file:1",
+        "caller"    : "org.webosports.app.messaging",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]

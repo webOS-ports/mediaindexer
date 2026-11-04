@@ -58,5 +58,13 @@
             "extend": "allow",
             "delete": "allow"
         }
+    },
+    {
+        "type"      : "db.kind",
+        "object"    : "com.palm.media.types:1",
+        "caller"    : "org.webosports.app.messaging",
+        "operations": {
+            "read"  : "allow"
+        }
     }
 ]
