@@ -20,6 +20,7 @@
 #include "MediaFile.hh"
 #include "internal/utils.hh"
 #include "MetadataExtractor.hh"
+#include "VideoSize.hh"
 
 #include <glib-object.h>
 #include <gio/gio.h>
@@ -46,6 +47,11 @@
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
 #include <taglib/tfilestream.h>
+
+#include <QFile>
+#include <QImageIOHandler>
+#include <QImageReader>
+#include <QSize>
 
 using namespace std;
 
@@ -423,6 +429,31 @@ void MetadataExtractor::extractForImage(MediaFile &mf, int fd)
         mf.setCreatedTime(taken);
         mf.setCreatedTimeFromFile(true);
     }
+
+    // Its size from the header alone, as Qt's plugins read it: a format
+    // that cannot say without decoding the whole image is left at 0
+    QFile file;
+    if (lseek(fd, 0, SEEK_SET) == 0 && file.open(fd, QIODevice::ReadOnly, QFileDevice::DontCloseHandle)) {
+        QImageReader reader(&file);
+        QSize size = reader.size();
+        if (size.width() > 0 && size.height() > 0) {
+            // As shown: EXIF orientations 5 to 8 turn it on its side
+            if (reader.transformation() & QImageIOHandler::TransformationRotate90)
+                size.transpose();
+            mf.setWidth((unsigned int) size.width());
+            mf.setHeight((unsigned int) size.height());
+        }
+        file.close();
+    }
+}
+
+void MetadataExtractor::extractForVideo(MediaFile &mf, int fd, uint64_t size)
+{
+    unsigned int width, height;
+    if (videosize::fromIsoBmff(fd, size, width, height)) {
+        mf.setWidth(width);
+        mf.setHeight(height);
+    }
 }
 
 MediaFile MetadataExtractor::extract(const DetectedFile &d)
@@ -461,6 +492,8 @@ MediaFile MetadataExtractor::extract(const DetectedFile &d)
         extractForAudio(mf, fd);
     else if (d.type == ImageMedia)
         extractForImage(mf, fd);
+    else if (d.type == VideoMedia)
+        extractForVideo(mf, fd, (uint64_t) st.st_size);
 
     mf.rebuildSearchKey();
 

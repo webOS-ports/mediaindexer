@@ -15,3 +15,10 @@ add_executable(mediaindexer-owned-tests
 target_include_directories(mediaindexer-owned-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 add_test(NAME mediaindexer-owned COMMAND mediaindexer-owned-tests)
+
+add_executable(mediaindexer-videosize-tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/VideoSizeTest.cc
+    ${PROJECT_SOURCE_DIR}/src/VideoSize.cc)
+target_include_directories(mediaindexer-videosize-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+add_test(NAME mediaindexer-videosize COMMAND mediaindexer-videosize-tests)

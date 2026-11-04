@@ -56,6 +56,8 @@ public:
     // Reads the tags through fd, the file's descriptor
     void extractForAudio(MediaFile &mf, int fd);
     void extractForImage(MediaFile &mf, int fd);
+    // size is the file's size
+    void extractForVideo(MediaFile &mf, int fd, uint64_t size);
 
     // When a picture was taken, from the EXIF in the start of a JPEG or a
     // TIFF file, as seconds since the epoch
