@@ -70,6 +70,7 @@ file(GLOB SOURCES
     src/SubtreeWatcher.cc
     src/util.cc
     src/utils.cc
+    src/VideoSize.cc
     src/mozilla/fts3_porter.c
     src/mozilla/Normalize.c)
 

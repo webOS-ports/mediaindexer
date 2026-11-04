@@ -76,6 +76,10 @@ public:
 
     unsigned int year() const noexcept { return _year; }
 
+    // Images and videos, as shown (turned by their orientation); 0 if unknown
+    unsigned int width() const noexcept { return _width; }
+    unsigned int height() const noexcept { return _height; }
+
     void setEtag(const std::string& value) { _etag = value; }
     void setType(MediaType value) { _type = value; }
     void setSize(uint64_t value) { _size = value; }
@@ -115,6 +119,9 @@ public:
     void setAlbumPath(const std::string& value) { _albumPath = value; }
 
     void setYear(unsigned int value) { _year = value; }
+
+    void setWidth(unsigned int value) { _width = value; }
+    void setHeight(unsigned int value) { _height = value; }
 
     void rebuildSearchKey();
 
@@ -158,6 +165,9 @@ private:
     unsigned int _lastPlayTime;
 
     unsigned int _year;
+
+    unsigned int _width = 0;
+    unsigned int _height = 0;
 };
 
 }

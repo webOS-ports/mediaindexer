@@ -94,6 +94,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putBool("appCacheComplete", file.appCacheCompleted());
         err = obj.putString("searchKey", file.title().c_str());
         err = obj.putString("title", file.title().c_str());
+        // As shown, 0 when the file does not say
+        err = obj.putInt("width", file.width());
+        err = obj.putInt("height", file.height());
         // FIXME add thumbnails, just empty tag for now
         MojObject thumbArr(MojObject::Type::TypeArray);
         err = obj.put("thumbnails", thumbArr);
@@ -110,6 +113,9 @@ void MojoMediaObjectSerializer::SerializeToDatabaseObject(const MediaFile& file,
         err = obj.putInt("createdTime", file.createdTime());
         err = obj.putInt("modifiedTime", file.modifiedTime());
         err = obj.putString("type", "local");
+        // As shown, 0 when the file does not say
+        err = obj.putInt("width", file.width());
+        err = obj.putInt("height", file.height());
         // FIXME add thumbnails, just empty tag for now
         MojObject thumbArr(MojObject::Type::TypeArray);
         err = obj.put("thumbnails", thumbArr);
