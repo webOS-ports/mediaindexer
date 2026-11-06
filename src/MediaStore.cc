@@ -41,17 +41,17 @@ namespace  mediascanner {
 
 // Increment this whenever changing db schema.
 // It will cause dbstore to rebuild its tables.
-static const int schemaVersion = 9;
+static const int schemaVersion = 10;
 
 // Versions whose db8 entries only lack fields added since: for those the file
 // list alone is rebuilt, every file is read again and its entry updated, and
 // what apps stored in the entries is kept. (6 added mimeType; 7 added
 // createdTime and modifiedTime to images and appCacheComplete to videos;
 // 8 took images' createdTime from their EXIF; 9 added width and height to
-// images and videos.)
+// images and videos; 10 put videos in the album of their folder.)
 static bool entriesStillUsable(int version)
 {
-    return version >= 5 && version <= 8;
+    return version >= 5 && version <= 9;
 }
 
 static int getSchemaVersion(sqlite3 *db)

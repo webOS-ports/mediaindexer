@@ -20,6 +20,7 @@
 #include "MediaFile.hh"
 #include "internal/utils.hh"
 #include "MetadataExtractor.hh"
+#include "FolderAlbum.hh"
 #include "VideoSize.hh"
 
 #include <glib-object.h>
@@ -57,9 +58,6 @@ using namespace std;
 
 namespace mediascanner
 {
-
-const char* const MetadataExtractor::CameraAlbumPath = "camera://";
-const char* const MetadataExtractor::CameraAlbumName = "Camera";
 
 MetadataExtractor::MetadataExtractor(int seconds)
 {
@@ -198,28 +196,10 @@ void MetadataExtractor::setCameraDirectory(const std::string &path)
     cameraDirectory = path;
 }
 
-static std::string asciiLower(std::string s)
+void MetadataExtractor::assignFolderAlbum(MediaFile &mf) const
 {
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return g_ascii_tolower((gchar) c); });
-    return s;
-}
-
-std::string MetadataExtractor::getAlbumPathFromImage(const std::string& path)
-{
-    // Whatever the case of "DCIM", and only that folder: not "DCIMfoo"
-    std::string pathInLower = asciiLower(path);
-    std::string dcimPath = asciiLower(cameraDirectory) + "/";
-    if (!cameraDirectory.empty() && pathInLower.compare(0, dcimPath.size(), dcimPath) == 0)
-        return CameraAlbumPath;
-
-    return path.substr(0, path.find_last_of("/"));
-}
-
-std::string MetadataExtractor::getAlbumNameFromPath(const std::string& path)
-{
-    if (path == CameraAlbumPath)
-        return CameraAlbumName;
-    return path.substr(path.find_last_of("/") + 1, path.size() - 1);
+    mf.setAlbumPath(folderalbum::pathFor(mf.path(), cameraDirectory));
+    mf.setAlbum(folderalbum::nameFor(mf.albumPath()));
 }
 
 namespace {
@@ -417,8 +397,7 @@ bool MetadataExtractor::captureTimeFromExif(const unsigned char *data, size_t si
 void MetadataExtractor::extractForImage(MediaFile &mf, int fd)
 {
     mf.setMediaType("image");
-    mf.setAlbumPath(getAlbumPathFromImage(mf.path()));
-    mf.setAlbum(getAlbumNameFromPath(mf.albumPath()));
+    assignFolderAlbum(mf);
 
     // When the picture was taken, if it says. EXIF comes before the image
     // data, and is at most 64 KiB.
@@ -449,6 +428,10 @@ void MetadataExtractor::extractForImage(MediaFile &mf, int fd)
 
 void MetadataExtractor::extractForVideo(MediaFile &mf, int fd, uint64_t size)
 {
+    // In the album of its folder, as a picture there is: the file picker
+    // lists a folder's videos through it
+    assignFolderAlbum(mf);
+
     unsigned int width, height;
     if (videosize::fromIsoBmff(fd, size, width, height)) {
         mf.setWidth(width);

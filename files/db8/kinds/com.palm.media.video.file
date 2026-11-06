@@ -49,6 +49,17 @@
             ]
         },
         {
+            "name": "albumId_createdTime",
+            "props": [
+                {
+                    "name": "albumId"
+                },
+                {
+                    "name": "createdTime"
+                }
+            ]
+        },
+        {
             "name": "capturedOnDevice_albumId",
             "props": [
                 {
