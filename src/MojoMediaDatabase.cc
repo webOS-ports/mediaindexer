@@ -31,6 +31,7 @@
 #include "internal/utils.hh"
 #include "MediaFile.hh"
 #include "OwnedEntries.hh"
+#include "FolderAlbum.hh"
 
 #ifndef DB_KIND_DIRECTORY
 #define DB_KIND_DIRECTORY "/etc/palm/db/kinds/"
@@ -289,7 +290,7 @@ static void forgetEntry(MojoMediaDatabase *database, const MojObject &entry)
         deleteThumbnail(thumbnail);
 }
 
-// Counts again the album, genre and artist, or the image album, an entry was in
+// Counts again the album, genre and artist, or the folder album, an entry was in
 static void enqueueRecounts(MojoMediaDatabase *database, const MojObject &entry)
 {
     MojString kind;
@@ -309,12 +310,12 @@ static void enqueueRecounts(MojoMediaDatabase *database, const MojObject &entry)
             database->enqueue(new RecountAudioCollectionCommand(database, RecountAudioCollectionCommand::Artist,
                                                                 artist, MojObject()), false);
     }
-    else if (strncmp(kind.data(), "com.palm.media.image.file:", strlen("com.palm.media.image.file:")) == 0) {
-        // "" until the image was assigned to its album
+    else if (folderalbum::inFolderAlbum(kind.data())) {
+        // "" until the picture or video was assigned to its album
         MojObject albumId;
         MojString albumIdStr;
         if (entry.get("albumId", albumId) && albumId.stringValue(albumIdStr) == MojErrNone && !albumIdStr.empty())
-            database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+            database->enqueue(new CountAlbumMediaCommand(database, albumId), false);
     }
 }
 
@@ -363,11 +364,11 @@ public:
 
 protected:
     // What apps keep in an entry (a bookmark, a play position, thumbnails),
-    // when the file was first found, and the image album it was put in (the
+    // when the file was first found, and the folder album it was put in (the
     // path, and so the album, is the same; written as "" until the album is
-    // looked up again, its album would count no images and be deleted): a
-    // file written again leaves them as they are. A field the entry does not
-    // have yet is filled in.
+    // looked up again, its album would count no pictures or videos and be
+    // deleted): a file written again leaves them as they are. A field the
+    // entry does not have yet is filled in.
     static constexpr const char* keptFields[] = {
         "bookmark", "playbackPosition", "lastPlayTime", "thumbnails", "serviced",
         "hasResizedThumbnails", "appCacheCompleted", "appCacheComplete", "createdTime", "albumId"
@@ -474,10 +475,10 @@ protected:
 
     void enqueueFollowUps(const MojObject &idToUpdate)
     {
-        if (file.type() == ImageMedia && file.albumPath().size() > 0) {
-
-            database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path()), false);
-            database->enqueue(new AddAlbumForImageCommand(database, file, idToUpdate), false);
+        if (folderalbum::hasFolderAlbum(file.type()) && file.albumPath().size() > 0) {
+            if (file.type() == ImageMedia)
+                database->enqueue(new GenerateImageThumbnailCommand(database, idToUpdate, file.path()), false);
+            database->enqueue(new AddFolderAlbumCommand(database, file, idToUpdate), false);
         }
         else if (file.type() == AudioMedia) {
 
@@ -690,7 +691,7 @@ protected:
             else if (kind == 2)
                 database->enqueue(new CountArtistAudiosCommand(database, id, name), false);
             else if (!isAccountEntry(*it))      // a cloud album is counted by its service
-                database->enqueue(new CountAlbumImagesCommand(database, id), false);
+                database->enqueue(new CountAlbumMediaCommand(database, id), false);
         }
 
         // The same kind from where this page ended, or the next kind

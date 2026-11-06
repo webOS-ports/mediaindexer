@@ -56,6 +56,7 @@ webos_add_compiler_flags(ALL "-DMOJ_LINUX")
 
 file(GLOB SOURCES
     src/Album.cc
+    src/FolderAlbum.cc
     src/MediaFile.cc
     src/MediaStore.cc
     src/MetadataExtractor.cc

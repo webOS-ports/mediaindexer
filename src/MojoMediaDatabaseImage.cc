@@ -1,38 +1,60 @@
-class CountAlbumImagesCommand : public BaseCommand
+// Counts the pictures and the videos in a folder album: the file picker
+// lists an album for its pictures when total.images is above 0, and for its
+// videos when total.videos is. An album with neither goes.
+class CountAlbumMediaCommand : public BaseCommand
 {
 public:
-    CountAlbumImagesCommand(MojoMediaDatabase *database, const MojObject& albumId) :
-        BaseCommand("CountAlbumImagesCommand", database),
-        query_images_slot(this, &CountAlbumImagesCommand::QueryImagesResponse),
-        album_update_slot(this, &CountAlbumImagesCommand::AlbumUpdateResponse),
+    CountAlbumMediaCommand(MojoMediaDatabase *database, const MojObject& albumId) :
+        BaseCommand("CountAlbumMediaCommand", database),
+        query_images_slot(this, &CountAlbumMediaCommand::QueryImagesResponse),
+        query_videos_slot(this, &CountAlbumMediaCommand::QueryVideosResponse),
+        album_update_slot(this, &CountAlbumMediaCommand::AlbumUpdateResponse),
         albumId(albumId)
     {
     }
 
     void execute()
     {
-        MojDbQuery query;
-        query.select("_id");
-        query.from("com.palm.media.image.file:1");
-        query.where("albumId", MojDbQuery::OpEq, albumId);
-
-        MojErr err = findCount(database, query_images_slot, query);
+        MojErr err = findCount(database, query_images_slot, query("com.palm.media.image.file:1"));
         ErrorToException(err);
     }
 
 protected:
-    MojDbClient::Signal::Slot<CountAlbumImagesCommand> query_images_slot;
-    MojDbClient::Signal::Slot<CountAlbumImagesCommand> album_update_slot;
+    MojDbClient::Signal::Slot<CountAlbumMediaCommand> query_images_slot;
+    MojDbClient::Signal::Slot<CountAlbumMediaCommand> query_videos_slot;
+    MojDbClient::Signal::Slot<CountAlbumMediaCommand> album_update_slot;
+
+    MojDbQuery query(const char *kind) const
+    {
+        MojDbQuery query;
+        query.select("_id");
+        query.from(kind);
+        query.where("albumId", MojDbQuery::OpEq, albumId);
+        return query;
+    }
 
     MojErr QueryImagesResponse(MojObject &response, MojErr responseErr)
     {
         FailOnResponseError(response, responseErr);
 
-        MojInt64 images = 0;
         MojErr err = response.getRequired("count", images);
         FailOnError(err);
 
-        if (images == 0) {
+        err = findCount(database, query_videos_slot, query("com.palm.media.video.file:1"));
+        FailOnError(err);
+
+        return MojErrNone;
+    }
+
+    MojErr QueryVideosResponse(MojObject &response, MojErr responseErr)
+    {
+        FailOnResponseError(response, responseErr);
+
+        MojInt64 videos = 0;
+        MojErr err = response.getRequired("count", videos);
+        FailOnError(err);
+
+        if (folderalbum::isEmpty(images, videos)) {
             err = deleteEntry(database, album_update_slot, albumId);
             FailOnError(err);
             return MojErrNone;
@@ -40,6 +62,7 @@ protected:
 
         MojObject totalObj;
         totalObj.putInt("images", images);
+        totalObj.putInt("videos", videos);
 
         err = mergeTotal(database, album_update_slot, albumId, totalObj);
         FailOnError(err);
@@ -58,16 +81,17 @@ protected:
 
 private:
     MojObject albumId;
+    MojInt64 images = 0;
 };
 
-class AddAlbumForImageCommand : public BaseCommand
+class AddFolderAlbumCommand : public BaseCommand
 {
 public:
-    AddAlbumForImageCommand(MojoMediaDatabase *database, MediaFile file, const MojObject& idToUpdate) :
-        BaseCommand("AddAlbumForImageCommand", database),
-        query_album_slot(this, &AddAlbumForImageCommand::QueryForAlbumResponse),
-        insert_album_slot(this, &AddAlbumForImageCommand::InsertAlbumResponse),
-        image_update_slot(this, &AddAlbumForImageCommand::ImageUpdateResponse),
+    AddFolderAlbumCommand(MojoMediaDatabase *database, MediaFile file, const MojObject& idToUpdate) :
+        BaseCommand("AddFolderAlbumCommand", database),
+        query_album_slot(this, &AddFolderAlbumCommand::QueryForAlbumResponse),
+        insert_album_slot(this, &AddFolderAlbumCommand::InsertAlbumResponse),
+        file_update_slot(this, &AddFolderAlbumCommand::FileUpdateResponse),
         file(file),
         idToUpdate(idToUpdate)
     {
@@ -89,9 +113,9 @@ public:
     }
 
 protected:
-    MojDbClient::Signal::Slot<AddAlbumForImageCommand> query_album_slot;
-    MojDbClient::Signal::Slot<AddAlbumForImageCommand> insert_album_slot;
-    MojDbClient::Signal::Slot<AddAlbumForImageCommand> image_update_slot;
+    MojDbClient::Signal::Slot<AddFolderAlbumCommand> query_album_slot;
+    MojDbClient::Signal::Slot<AddFolderAlbumCommand> insert_album_slot;
+    MojDbClient::Signal::Slot<AddFolderAlbumCommand> file_update_slot;
 
     MojErr QueryForAlbumResponse(MojObject &response, MojErr responseErr)
     {
@@ -103,7 +127,7 @@ protected:
 
         // if we already have an album with the same path we can use it
         if (results.size() > 0)
-            return updateImage(response);
+            return assignFile(response);
 
         MojObject::ObjectVec objectsToInsert;
 
@@ -123,8 +147,9 @@ protected:
         albumObj.putBool("toBeDeleted", false);
 
         MojObject totalObj;
-        // the image count is updated once the image is assigned to it
+        // counted once the picture or video is assigned to it
         totalObj.putInt("images", 0);
+        totalObj.putInt("videos", 0);
         albumObj.put("total", totalObj);
 
         // we will enqueue a command once the album is created to generate the
@@ -144,10 +169,10 @@ protected:
     {
         FailOnResponseError(response, responseErr);
 
-        return updateImage(response);
+        return assignFile(response);
     }
 
-    MojErr updateImage(MojObject &response)
+    MojErr assignFile(MojObject &response)
     {
         MojObject results;
         MojErr err = response.getRequired("results", results);
@@ -167,9 +192,9 @@ protected:
             FailOnError(err);
         }
 
-        // The image is assigned in this same command: as a command of its
+        // The file is assigned in this same command: as a command of its
         // own it came after whatever was queued meanwhile, such as the
-        // recount after the removal of the album's last other image, which
+        // recount after the removal of the album's last other file, which
         // found the album empty and deleted it
         this->albumId = albumId;
         MojObject toMerge;
@@ -179,26 +204,26 @@ protected:
         MojObject::ObjectVec objects;
         objects.push(toMerge);
 
-        err = database->databaseClient().merge(image_update_slot, objects.begin(), objects.end());
+        err = database->databaseClient().merge(file_update_slot, objects.begin(), objects.end());
         FailOnError(err);
 
         return MojErrNone;
     }
 
-    MojErr ImageUpdateResponse(MojObject &response, MojErr responseErr)
+    MojErr FileUpdateResponse(MojObject &response, MojErr responseErr)
     {
         IgnoreIfAbandoned();
 
-        // The image's entry went meanwhile (the file was removed): nothing to
+        // The file's entry went meanwhile (the file was removed): nothing to
         // assign, but the album may be empty now
         if (responseErr == MojErrDbKindNotSpecified) {
-            database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+            database->enqueue(new CountAlbumMediaCommand(database, albumId), false);
             database->finish();
             return MojErrNone;
         }
         FailOnResponseError(response, responseErr);
 
-        database->enqueue(new CountAlbumImagesCommand(database, albumId), false);
+        database->enqueue(new CountAlbumMediaCommand(database, albumId), false);
         database->enqueue(new GenerateAlbumThumbnailsCommand(database, albumId), false);
 
         database->finish();

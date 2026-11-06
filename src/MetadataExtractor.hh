@@ -63,16 +63,13 @@ public:
     // TIFF file, as seconds since the epoch
     static bool captureTimeFromExif(const unsigned char *data, size_t size, uint64_t &out);
 
-    std::string getAlbumPathFromImage(const std::string& path);
-    std::string getAlbumNameFromPath(const std::string& path);
-
-    // Images below it form the one camera album
+    // Images and videos below it form the one camera album
     void setCameraDirectory(const std::string &path);
 
-    static const char* const CameraAlbumPath;
-    static const char* const CameraAlbumName;
-
 private:
+    // The album of the image or video's folder, see FolderAlbum.hh
+    void assignFolderAlbum(MediaFile &mf) const;
+
     std::string cameraDirectory = "/media/internal/DCIM";
 };
 

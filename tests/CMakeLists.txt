@@ -22,3 +22,22 @@ add_executable(mediaindexer-videosize-tests
 target_include_directories(mediaindexer-videosize-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 add_test(NAME mediaindexer-videosize COMMAND mediaindexer-videosize-tests)
+
+add_executable(mediaindexer-folderalbum-tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/FolderAlbumTest.cc
+    ${PROJECT_SOURCE_DIR}/src/FolderAlbum.cc)
+target_include_directories(mediaindexer-folderalbum-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+add_test(NAME mediaindexer-folderalbum COMMAND mediaindexer-folderalbum-tests)
+
+add_executable(mediaindexer-extractoralbum-tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/MetadataExtractorAlbumTest.cc
+    ${PROJECT_SOURCE_DIR}/src/MetadataExtractor.cc
+    ${PROJECT_SOURCE_DIR}/src/MediaFile.cc
+    ${PROJECT_SOURCE_DIR}/src/FolderAlbum.cc
+    ${PROJECT_SOURCE_DIR}/src/VideoSize.cc)
+target_include_directories(mediaindexer-extractoralbum-tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(mediaindexer-extractoralbum-tests
+    ${GLIB2_LDFLAGS} ${GIO2_LDFLAGS} ${TAGLIB_LDFLAGS} Qt::Gui)
+
+add_test(NAME mediaindexer-extractoralbum COMMAND mediaindexer-extractoralbum-tests)
